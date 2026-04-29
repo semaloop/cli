@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure git
+        run: |
+          git config user.name "semaloop-release[bot]"
+          git config user.email "271515571+semaloop-release[bot]@users.noreply.github.com"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          install-only: true
+
+      - name: Install semantic-release plugins
+        run: npm install --no-save semantic-release @semantic-release/changelog @semantic-release/git
+
+      - name: Release
+        id: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          npx semantic-release | tee /tmp/semantic-release.log
+          if grep -q "Published release" /tmp/semantic-release.log; then
+            echo "new_release=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run GoReleaser
+        if: steps.semantic-release.outputs.new_release == 'true'
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

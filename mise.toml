@@ -1,0 +1,8 @@
+[tools]
+go = "1.26.0"
+"node" = "latest"
+"npm:@goreleaser/goreleaser" = "latest"
+
+[tasks.generate-client]
+description = "Generate a Go HTTP client from an OpenAPI spec. Usage: mise run generate-client -- <spec>"
+run = 'go run ./cmd/generate-client "$@"'
