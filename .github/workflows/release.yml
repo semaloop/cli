@@ -21,6 +21,10 @@ jobs:
         with:
           app-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: semaloop
+          repositories: |
+            cli
+            homebrew-tap
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +35,7 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "semaloop-release[bot]"
+          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
 
       - name: Setup Go
@@ -69,4 +73,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
