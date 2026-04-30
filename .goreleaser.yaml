@@ -35,3 +35,21 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
+
+brews:
+  - name: semaloop
+    repository:
+      owner: semaloop
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://semaloop.com"
+    description: "Command-line interface for Semaloop"
+    license: "MIT"
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    commit_msg_template: "chore: Bump semaloop to {{ .Tag }}"
+    test: |
+      system "#{bin}/semaloop", "--version"
