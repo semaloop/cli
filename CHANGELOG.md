@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/semaloop/cli/compare/v1.1.0...v1.2.0) (2026-04-30)
+
+
+### Features
+
+* Add log line to report version ([#7](https://github.com/semaloop/cli/issues/7)) ([520bb0e](https://github.com/semaloop/cli/commit/520bb0e2a35b9d7257ed0f8a9f41acd5b209e0ca))
+
 # [1.1.0](https://github.com/semaloop/cli/compare/v1.0.0...v1.1.0) (2026-04-30)
 
 
