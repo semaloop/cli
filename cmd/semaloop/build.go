@@ -15,7 +15,7 @@ type BuildCmd struct {
 
 // BuildPushCmd uploads a build artifact to Semaloop.
 type BuildPushCmd struct {
-	File string `arg:"" help:"Path to the build artifact to upload." type:"path"`
+	File string `arg:"" help:"Path to the build artifact to upload (.app or .ipa)." type:"path"`
 }
 
 func (c *BuildPushCmd) Run() error {

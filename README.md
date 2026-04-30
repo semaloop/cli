@@ -28,7 +28,7 @@ semaloop --help
 The Semaloop CLI supports:
 
 - `semaloop auth`: Authenticate with the Semaloop API.
-- `semaloop build push`: Push an iOS Simulator (`.app`) file for testing.
+- `semaloop build push`: Push an iOS build artifact (`.app` or `.ipa`) for testing.
 
 ## Contributing
 
