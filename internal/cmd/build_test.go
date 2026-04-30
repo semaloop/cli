@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -171,6 +173,144 @@ func makeAppBundle(t *testing.T) string {
 	return dir
 }
 
+// makeIPAFile creates a minimal valid .ipa (a zip archive containing a
+// Payload/Demo.app/ entry) at a path inside t.TempDir.
+func makeIPAFile(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "App.ipa")
+	writeIPA(t, path, func(zw *zip.Writer) {
+		if _, err := zw.Create("Payload/Demo.app/"); err != nil {
+			t.Fatal(err)
+		}
+		w, err := zw.Create("Payload/Demo.app/Info.plist")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte("<plist/>")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	return path
+}
+
+// writeIPA writes a zip archive at path, calling fn to populate its entries.
+func writeIPA(t *testing.T, path string, fn func(*zip.Writer)) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	zw := zip.NewWriter(f)
+	fn(zw)
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateArtifactValidApp(t *testing.T) {
+	path := makeAppBundle(t)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateArtifact(path, info); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+}
+
+func TestValidateArtifactValidIPA(t *testing.T) {
+	path := makeIPAFile(t)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateArtifact(path, info); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+}
+
+func TestValidateArtifactAppAsFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.app")
+	if err := os.WriteFile(path, []byte("not a bundle"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "expected a directory") {
+		t.Errorf("expected 'expected a directory' error, got %v", err)
+	}
+}
+
+func TestValidateArtifactIPAAsDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.ipa")
+	if err := os.Mkdir(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "expected a file") {
+		t.Errorf("expected 'expected a file' error, got %v", err)
+	}
+}
+
+func TestValidateArtifactIPANotZip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.ipa")
+	if err := os.WriteFile(path, []byte("not a zip"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "not a zip archive") {
+		t.Errorf("expected 'not a zip archive' error, got %v", err)
+	}
+}
+
+func TestValidateArtifactIPAMissingPayload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.ipa")
+	writeIPA(t, path, func(zw *zip.Writer) {
+		w, err := zw.Create("README.txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte("hello")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "Payload/ not found") {
+		t.Errorf("expected 'Payload/ not found' error, got %v", err)
+	}
+}
+
+func TestValidateArtifactUnsupportedExtension(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.zip")
+	if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "expected .app or .ipa") {
+		t.Errorf("expected 'expected .app or .ipa' error, got %v", err)
+	}
+}
+
 func TestPushReturnsUploadID(t *testing.T) {
 	const uploadID = "abc-123"
 	srv := pushServer{
@@ -187,6 +327,49 @@ func TestPushReturnsUploadID(t *testing.T) {
 	}
 	if result.UploadID != uploadID {
 		t.Errorf("expected UploadID %q, got %q", uploadID, result.UploadID)
+	}
+}
+
+func TestPushReturnsUploadID_IPA(t *testing.T) {
+	const uploadID = "ipa-123"
+
+	var uploaded bytes.Buffer
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/uploads":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, createOKBody(uploadID, srv.URL+"/upload"))
+		case r.Method == http.MethodPut && r.URL.Path == "/upload":
+			io.Copy(&uploaded, r.Body)
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/uploads/finalize":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, finalizeOKBody())
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	ipaPath := makeIPAFile(t)
+	expected, err := os.ReadFile(ipaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Push(context.Background(), "key", srv.URL, ipaPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.UploadID != uploadID {
+		t.Errorf("expected UploadID %q, got %q", uploadID, result.UploadID)
+	}
+	if !bytes.Equal(uploaded.Bytes(), expected) {
+		t.Errorf("expected uploaded body to equal raw .ipa bytes (%d bytes), got %d bytes", len(expected), uploaded.Len())
 	}
 }
 

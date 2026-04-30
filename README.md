@@ -2,12 +2,19 @@
 
 This is the home of `semaloop`, a way of interacting with [Semaloop] from the command line.
 
+> [!NOTE]
+> The Semaloop CLI is currently in early access. If you're interested in using it, please get in touch with us.
+
 ## Installation
 
 Download the latest binary for your platform from the [releases page](https://github.com/semaloop/cli/releases).
 
-> [!NOTE]
-> The Semaloop CLI is currently in early access. If you're interested in using it, please get in touch with us.
+On macOS, you can also install via Homebrew:
+
+```
+brew tap semaloop/tap
+brew install semaloop
+```
 
 ## Usage
 
@@ -28,7 +35,7 @@ semaloop --help
 The Semaloop CLI supports:
 
 - `semaloop auth`: Authenticate with the Semaloop API.
-- `semaloop build push`: Push an iOS Simulator (`.app`) file for testing.
+- `semaloop build push`: Push an iOS build artifact (`.app` or `.ipa`) for testing.
 
 ## Contributing
 

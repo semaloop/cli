@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/log"
 	"github.com/semaloop/cli/internal/api"
@@ -160,10 +161,34 @@ func validateArtifact(path string, info os.FileInfo) error {
 		if _, err := os.Stat(filepath.Join(path, "Info.plist")); err != nil {
 			return fmt.Errorf("%q does not appear to be a valid .app bundle (Info.plist not found)", path)
 		}
+	case ".ipa":
+		if info.IsDir() {
+			return fmt.Errorf("%q is not a valid .ipa file (expected a file, not a directory)", path)
+		}
+		if err := validateIPA(path); err != nil {
+			return err
+		}
 	default:
-		return fmt.Errorf("%q is not a supported iOS artifact (expected .app)", path)
+		return fmt.Errorf("%q is not a supported iOS artifact (expected .app or .ipa)", path)
 	}
 	return nil
+}
+
+// validateIPA verifies that path is a zip archive containing a Payload/ entry,
+// which is the canonical structural marker of an iOS .ipa archive.
+func validateIPA(path string) error {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return fmt.Errorf("%q does not appear to be a valid .ipa file (not a zip archive): %w", path, err)
+	}
+	defer zr.Close()
+
+	for _, f := range zr.File {
+		if f.Name == "Payload/" || strings.HasPrefix(f.Name, "Payload/") {
+			return nil
+		}
+	}
+	return fmt.Errorf("%q does not appear to be a valid .ipa file (Payload/ not found)", path)
 }
 
 // zipDir creates a temporary zip archive of the directory at src and returns its path.
