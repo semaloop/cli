@@ -30,6 +30,8 @@ type CLI struct {
 }
 
 func main() {
+	log.Info("Running Semaloop CLI", "version", version.Version)
+
 	cli := CLI{}
 	ctx := kong.Parse(&cli, kong.Vars{"version": version.Version})
 	if cli.Debug {
@@ -42,6 +44,7 @@ func main() {
 	if cli.Quiet {
 		log.SetOutput(io.Discard)
 	}
+
 	if err := ctx.Run(); err != nil {
 		if !cli.Quiet {
 			ctx.FatalIfErrorf(err)
