@@ -321,7 +321,7 @@ func TestPushReturnsUploadID(t *testing.T) {
 		finalizeBody:   finalizeOKBody(),
 	}.start(t)
 
-	result, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t))
+	result, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -361,7 +361,7 @@ func TestPushReturnsUploadID_IPA(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := Push(context.Background(), "key", srv.URL, ipaPath)
+	result, err := Push(context.Background(), "key", srv.URL, ipaPath, PushOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestPushCreateUploadUnauthorized(t *testing.T) {
 		createBody:   func(string) string { return errorBody("unauthorized") },
 	}.start(t)
 
-	_, err := Push(context.Background(), "bad-key", srv.URL, makeAppBundle(t))
+	_, err := Push(context.Background(), "bad-key", srv.URL, makeAppBundle(t), PushOptions{})
 	if !errors.Is(err, client.ErrUnauthorized) {
 		t.Errorf("expected ErrUnauthorized, got %v", err)
 	}
@@ -391,7 +391,7 @@ func TestPushCreateUploadForbidden(t *testing.T) {
 		createBody:   func(string) string { return errorBody("forbidden") },
 	}.start(t)
 
-	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t))
+	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{})
 	if !errors.Is(err, client.ErrForbidden) {
 		t.Errorf("expected ErrForbidden, got %v", err)
 	}
@@ -406,7 +406,7 @@ func TestPushUploadFileFails(t *testing.T) {
 		finalizeBody:   finalizeOKBody(),
 	}.start(t)
 
-	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t))
+	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -421,7 +421,7 @@ func TestPushFinalizeUnauthorized(t *testing.T) {
 		finalizeBody:   errorBody("unauthorized"),
 	}.start(t)
 
-	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t))
+	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{})
 	if !errors.Is(err, client.ErrUnauthorized) {
 		t.Errorf("expected ErrUnauthorized, got %v", err)
 	}
@@ -436,7 +436,7 @@ func TestPushFinalizeForbidden(t *testing.T) {
 		finalizeBody:   errorBody("forbidden"),
 	}.start(t)
 
-	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t))
+	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{})
 	if !errors.Is(err, client.ErrForbidden) {
 		t.Errorf("expected ErrForbidden, got %v", err)
 	}
@@ -452,7 +452,7 @@ func TestPushFinalizeFailure(t *testing.T) {
 		finalizeBody:   string(body),
 	}.start(t)
 
-	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t))
+	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{})
 	if err == nil || !strings.Contains(err.Error(), "processing error") {
 		t.Errorf("expected 'processing error' in error, got %v", err)
 	}
@@ -467,7 +467,7 @@ func TestPushFinalizeNotFound(t *testing.T) {
 		finalizeBody:   errorBody("not found"),
 	}.start(t)
 
-	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t))
+	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{})
 	if err == nil || !strings.Contains(err.Error(), "upload not found") {
 		t.Errorf("expected 'upload not found' error, got %v", err)
 	}
