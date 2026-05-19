@@ -1,0 +1,33 @@
+workflows:
+  ios-semaloop:
+    name: iOS build & push to Semaloop
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      groups:
+        - semaloop
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.example.myapp
+      vars:
+        XCODE_WORKSPACE: "MyApp.xcworkspace"
+        XCODE_SCHEME: "MyApp"
+      xcode: latest
+    scripts:
+      - name: Set up provisioning profiles
+        script: xcode-project use-profiles
+      - name: Build ipa
+        script: |
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+      - name: Install Semaloop CLI
+        script: |
+          brew tap semaloop/tap
+          brew install semaloop
+      - name: Push build to Semaloop
+        script: |
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          semaloop build push "$IPA_PATH"
+    artifacts:
+      - build/ios/ipa/*.ipa
