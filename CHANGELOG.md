@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/semaloop/cli/compare/v1.2.0...v1.3.0) (2026-06-01)
+
+
+### Features
+
+* add --dry-run arg ([#8](https://github.com/semaloop/cli/issues/8)) ([6369601](https://github.com/semaloop/cli/commit/63696015efe0f065789f7ded60fe722e1fc5a7fa))
+
 # [1.2.0](https://github.com/semaloop/cli/compare/v1.1.0...v1.2.0) (2026-04-30)
 
 
