@@ -18,7 +18,7 @@ type BuildPushCmd struct {
 	File string `arg:"" help:"Path to the build artifact to upload (.app or .ipa)." type:"path"`
 }
 
-func (c *BuildPushCmd) Run(cli *CLI) error {
+func (c *BuildPushCmd) Run(g *Globals) error {
 	apiKey, err := config.APIKey()
 	if err != nil {
 		log.Error("Could not load configuration.", "err", err)
@@ -29,7 +29,7 @@ func (c *BuildPushCmd) Run(cli *CLI) error {
 		return nil
 	}
 
-	result, err := icmd.Push(context.Background(), apiKey, client.ServerURL(), c.File, icmd.PushOptions{DryRun: cli.DryRun})
+	result, err := icmd.Push(context.Background(), apiKey, client.ServerURL(), c.File, icmd.PushOptions{DryRun: g.DryRun})
 	if err != nil {
 		switch {
 		case errors.Is(err, client.ErrUnauthorized):
@@ -42,7 +42,7 @@ func (c *BuildPushCmd) Run(cli *CLI) error {
 		return nil
 	}
 
-	if cli.DryRun {
+	if g.DryRun {
 		log.Info("Dry run complete. No upload performed.")
 	} else {
 		log.Info("Build uploaded successfully.", "id", result.UploadID)
