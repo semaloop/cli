@@ -20,9 +20,16 @@ type PushResult struct {
 	UploadID string
 }
 
+// PushOptions configures optional behavior for Push.
+type PushOptions struct {
+	// DryRun performs all local input validation and packaging but skips every
+	// network call (create upload, PUT file, finalize).
+	DryRun bool
+}
+
 // Push creates a build upload and streams the file to the returned URL.
 // If filePath is a directory it is zipped into a temporary file first.
-func Push(ctx context.Context, apiKey, serverURL, filePath string) (PushResult, error) {
+func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOptions) (PushResult, error) {
 	filePath = filepath.Clean(filePath)
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -47,6 +54,11 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string) (PushResult, 
 		uploadPath = tmp
 
 		log.Debug("App bundle packaged.", "tmp", tmp)
+	}
+
+	if opts.DryRun {
+		log.Info("Dry run: artifact validated; skipping upload.", "path", filePath)
+		return PushResult{}, nil
 	}
 
 	c, err := api.NewClient(serverURL, api.WithClient(&client.AuthClient{APIKey: apiKey}))

@@ -20,11 +20,16 @@ func initLogger() *charmlog.Logger {
 	return l
 }
 
+type Globals struct {
+	Debug  bool `help:"Enable debug logging."`
+	JSON   bool `help:"Output logs as JSON." name:"json"`
+	Quiet  bool `short:"q" help:"Suppress all log output; rely on exit code for status."`
+	DryRun bool `help:"Validate inputs but skip all network calls." name:"dry-run"`
+}
+
 type CLI struct {
+	Globals
 	Version kong.VersionFlag `short:"v" help:"Print version."`
-	Debug   bool             `help:"Enable debug logging."`
-	JSON    bool             `help:"Output logs as JSON." name:"json"`
-	Quiet   bool             `short:"q" help:"Suppress all log output; rely on exit code for status."`
 	Auth    AuthCmd          `cmd:"" help:"Manage authentication."`
 	Build   BuildCmd         `cmd:"" help:"Manage builds."`
 }
@@ -33,7 +38,7 @@ func main() {
 	log.Info("Running Semaloop CLI", "version", version.Version)
 
 	cli := CLI{}
-	ctx := kong.Parse(&cli, kong.Vars{"version": version.Version})
+	ctx := kong.Parse(&cli, kong.Vars{"version": version.Version}, kong.Bind(&cli.Globals))
 	if cli.Debug {
 		log.SetLevel(charmlog.DebugLevel)
 	}
