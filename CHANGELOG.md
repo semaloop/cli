@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/semaloop/cli/compare/v1.3.0...v1.4.0) (2026-06-22)
+
+
+### Features
+
+* Clearer auth error in non-interactive sessions ([#10](https://github.com/semaloop/cli/issues/10)) ([60d8c50](https://github.com/semaloop/cli/commit/60d8c50cc7441dc9f40f6b74f7edb31e324875cf))
+
 # [1.3.0](https://github.com/semaloop/cli/compare/v1.2.0...v1.3.0) (2026-06-01)
 
 
