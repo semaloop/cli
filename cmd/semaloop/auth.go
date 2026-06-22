@@ -24,6 +24,9 @@ type AuthLoginCmd struct {
 func (c *AuthLoginCmd) Run() error {
 	key := c.APIKey
 	if key == "" {
+		if !term.IsTerminal(int(syscall.Stdin)) {
+			return fmt.Errorf("no terminal available to prompt for an API key, use --api-key or the SEMALOOP_API_KEY environment variable")
+		}
 		fmt.Fprint(os.Stderr, "Enter your Semaloop API key: ")
 		raw, err := term.ReadPassword(int(syscall.Stdin))
 		fmt.Fprintln(os.Stderr)
