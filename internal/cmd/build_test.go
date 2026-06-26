@@ -479,65 +479,6 @@ func TestPushFinalizeNotFound(t *testing.T) {
 	}
 }
 
-func TestGitRefProvided(t *testing.T) {
-	full := PushOptions{Repo: "owner/name", Commit: "abc123", Ref: "refs/heads/main"}
-	tests := []struct {
-		name    string
-		opts    PushOptions
-		want    bool
-		wantErr bool
-	}{
-		{"none", PushOptions{}, false, false},
-		{"all three", full, true, false},
-		{"repo only", PushOptions{Repo: full.Repo}, false, true},
-		{"commit only", PushOptions{Commit: full.Commit}, false, true},
-		{"ref only", PushOptions{Ref: full.Ref}, false, true},
-		{"missing ref", PushOptions{Repo: full.Repo, Commit: full.Commit}, false, true},
-		{"missing commit", PushOptions{Repo: full.Repo, Ref: full.Ref}, false, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := gitRefProvided(tt.opts)
-			if got != tt.want {
-				t.Errorf("expected provided=%v, got %v", tt.want, got)
-			}
-			if (err != nil) != tt.wantErr {
-				t.Errorf("expected err=%v, got %v", tt.wantErr, err)
-			}
-		})
-	}
-}
-
-// TestPushPartialGitRefRejected verifies a partial git ref fails validation
-// before any network call is made, including under --dry-run.
-func TestPushPartialGitRefRejected(t *testing.T) {
-	tests := []struct {
-		name string
-		opts PushOptions
-	}{
-		{"repo only", PushOptions{Repo: "owner/name"}},
-		{"missing ref", PushOptions{Repo: "owner/name", Commit: "abc123"}},
-		{"missing ref dry-run", PushOptions{DryRun: true, Repo: "owner/name", Commit: "abc123"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var hit bool
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				hit = true
-			}))
-			defer srv.Close()
-
-			_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), tt.opts)
-			if err == nil || !strings.Contains(err.Error(), "must be provided together") {
-				t.Errorf("expected 'must be provided together' error, got %v", err)
-			}
-			if hit {
-				t.Error("expected no network call for an invalid git ref")
-			}
-		})
-	}
-}
-
 // TestPushAllGitRefSent verifies a complete git ref is sent on the finalize
 // request, with --commit mapped to commitSha.
 func TestPushAllGitRefSent(t *testing.T) {

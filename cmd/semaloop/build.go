@@ -14,11 +14,15 @@ type BuildCmd struct {
 }
 
 // BuildPushCmd uploads a build artifact to Semaloop.
+//
+// The git context flags are optional but all-or-nothing: the `and:"gitref"`
+// group makes Kong reject a partial set (e.g. --git-repo without --git-commit)
+// at parse time.
 type BuildPushCmd struct {
-	File   string `arg:"" help:"Path to the build artifact to upload (.app or .ipa)." type:"path"`
-	Repo   string `help:"Source repository (owner/name) the build was produced from." name:"repo"`
-	Commit string `help:"Commit SHA the build was produced from." name:"commit"`
-	Ref    string `help:"Git ref (e.g. refs/heads/main) the build was produced from." name:"ref"`
+	File      string `arg:"" help:"Path to the build artifact to upload (.app or .ipa)." type:"path"`
+	GitRepo   string `help:"Source repository (owner/name) the build was produced from." name:"git-repo" and:"gitref"`
+	GitCommit string `help:"Commit SHA the build was produced from." name:"git-commit" and:"gitref"`
+	GitRef    string `help:"Git ref (e.g. refs/heads/main) the build was produced from." name:"git-ref" and:"gitref"`
 }
 
 func (c *BuildPushCmd) Run(g *Globals) error {
@@ -34,9 +38,9 @@ func (c *BuildPushCmd) Run(g *Globals) error {
 
 	result, err := icmd.Push(context.Background(), apiKey, client.ServerURL(), c.File, icmd.PushOptions{
 		DryRun: g.DryRun,
-		Repo:   c.Repo,
-		Commit: c.Commit,
-		Ref:    c.Ref,
+		Repo:   c.GitRepo,
+		Commit: c.GitCommit,
+		Ref:    c.GitRef,
 	})
 	if err != nil {
 		switch {
