@@ -155,9 +155,49 @@ func (FinalizeUploadFailureResponseSuccess) AllValues() []FinalizeUploadFailureR
 	}
 }
 
+// Ref: #/components/schemas/FinalizeUploadGitRef
+type FinalizeUploadGitRef struct {
+	// Commit SHA the build was produced from.
+	CommitSha string `json:"commitSha"`
+	// Git ref, e.g. refs/heads/main.
+	Ref string `json:"ref"`
+	// Repository identifier, e.g. owner/name.
+	Repo string `json:"repo"`
+}
+
+// GetCommitSha returns the value of CommitSha.
+func (s *FinalizeUploadGitRef) GetCommitSha() string {
+	return s.CommitSha
+}
+
+// GetRef returns the value of Ref.
+func (s *FinalizeUploadGitRef) GetRef() string {
+	return s.Ref
+}
+
+// GetRepo returns the value of Repo.
+func (s *FinalizeUploadGitRef) GetRepo() string {
+	return s.Repo
+}
+
+// SetCommitSha sets the value of CommitSha.
+func (s *FinalizeUploadGitRef) SetCommitSha(val string) {
+	s.CommitSha = val
+}
+
+// SetRef sets the value of Ref.
+func (s *FinalizeUploadGitRef) SetRef(val string) {
+	s.Ref = val
+}
+
+// SetRepo sets the value of Repo.
+func (s *FinalizeUploadGitRef) SetRepo(val string) {
+	s.Repo = val
+}
+
 // Ref: #/components/schemas/FinalizeUploadSuccessResponse
 type FinalizeUploadSuccessResponse struct {
-	AppId        NilString                            `json:"appId"`
+	AppId        string                               `json:"appId"`
 	BundleId     string                               `json:"bundleId"`
 	Success      FinalizeUploadSuccessResponseSuccess `json:"success"`
 	VersionLabel string                               `json:"versionLabel"`
@@ -165,7 +205,7 @@ type FinalizeUploadSuccessResponse struct {
 }
 
 // GetAppId returns the value of AppId.
-func (s *FinalizeUploadSuccessResponse) GetAppId() NilString {
+func (s *FinalizeUploadSuccessResponse) GetAppId() string {
 	return s.AppId
 }
 
@@ -190,7 +230,7 @@ func (s *FinalizeUploadSuccessResponse) GetVersionName() string {
 }
 
 // SetAppId sets the value of AppId.
-func (s *FinalizeUploadSuccessResponse) SetAppId(val NilString) {
+func (s *FinalizeUploadSuccessResponse) SetAppId(val string) {
 	s.AppId = val
 }
 
@@ -229,45 +269,46 @@ func (FinalizeUploadSuccessResponseSuccess) AllValues() []FinalizeUploadSuccessR
 	}
 }
 
-// NewNilString returns new NilString with value set to v.
-func NewNilString(v string) NilString {
-	return NilString{
+// NewOptFinalizeUploadGitRef returns new OptFinalizeUploadGitRef with value set to v.
+func NewOptFinalizeUploadGitRef(v FinalizeUploadGitRef) OptFinalizeUploadGitRef {
+	return OptFinalizeUploadGitRef{
 		Value: v,
+		Set:   true,
 	}
 }
 
-// NilString is nullable string.
-type NilString struct {
-	Value string
-	Null  bool
+// OptFinalizeUploadGitRef is optional FinalizeUploadGitRef.
+type OptFinalizeUploadGitRef struct {
+	Value FinalizeUploadGitRef
+	Set   bool
+}
+
+// IsSet returns true if OptFinalizeUploadGitRef was set.
+func (o OptFinalizeUploadGitRef) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptFinalizeUploadGitRef) Reset() {
+	var v FinalizeUploadGitRef
+	o.Value = v
+	o.Set = false
 }
 
 // SetTo sets value to v.
-func (o *NilString) SetTo(v string) {
-	o.Null = false
-	o.Value = v
-}
-
-// IsNull returns true if value is Null.
-func (o NilString) IsNull() bool { return o.Null }
-
-// SetToNull sets value to null.
-func (o *NilString) SetToNull() {
-	o.Null = true
-	var v string
+func (o *OptFinalizeUploadGitRef) SetTo(v FinalizeUploadGitRef) {
+	o.Set = true
 	o.Value = v
 }
 
 // Get returns value and boolean that denotes whether value was set.
-func (o NilString) Get() (v string, ok bool) {
-	if o.Null {
+func (o OptFinalizeUploadGitRef) Get() (v FinalizeUploadGitRef, ok bool) {
+	if !o.Set {
 		return v, false
 	}
 	return o.Value, true
 }
 
 // Or returns value if set, or given parameter if does not.
-func (o NilString) Or(d string) string {
+func (o OptFinalizeUploadGitRef) Or(d FinalizeUploadGitRef) FinalizeUploadGitRef {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -401,6 +442,10 @@ type PostCreateUploadUnauthorized ErrorResponse
 
 func (*PostCreateUploadUnauthorized) postCreateUploadRes() {}
 
+type PostFinalizeUploadBadRequest ErrorResponse
+
+func (*PostFinalizeUploadBadRequest) postFinalizeUploadRes() {}
+
 type PostFinalizeUploadForbidden ErrorResponse
 
 func (*PostFinalizeUploadForbidden) postFinalizeUploadRes() {}
@@ -410,13 +455,24 @@ type PostFinalizeUploadNotFound ErrorResponse
 func (*PostFinalizeUploadNotFound) postFinalizeUploadRes() {}
 
 type PostFinalizeUploadReq struct {
+	GitRef OptFinalizeUploadGitRef `json:"gitRef"`
 	// Upload ID returned by POST /api/v1/uploads.
 	ID string `json:"id"`
+}
+
+// GetGitRef returns the value of GitRef.
+func (s *PostFinalizeUploadReq) GetGitRef() OptFinalizeUploadGitRef {
+	return s.GitRef
 }
 
 // GetID returns the value of ID.
 func (s *PostFinalizeUploadReq) GetID() string {
 	return s.ID
+}
+
+// SetGitRef sets the value of GitRef.
+func (s *PostFinalizeUploadReq) SetGitRef(val OptFinalizeUploadGitRef) {
+	s.GitRef = val
 }
 
 // SetID sets the value of ID.
