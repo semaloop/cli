@@ -25,6 +25,33 @@ type PushOptions struct {
 	// DryRun performs all local input validation and packaging but skips every
 	// network call (create upload, PUT file, finalize).
 	DryRun bool
+
+	// Repo, Commit and Ref capture the git context the build was produced from.
+	// They are optional, but all-or-nothing: supply all three to record the
+	// build's git reference, or none to push exactly as before.
+	Repo   string
+	Commit string
+	Ref    string
+}
+
+// gitRefProvided reports whether the optional git context was supplied. It
+// enforces the all-or-nothing rule: all three of Repo, Commit and Ref must be
+// set together, or none of them. A partial set returns an error.
+func gitRefProvided(opts PushOptions) (bool, error) {
+	n := 0
+	for _, v := range []string{opts.Repo, opts.Commit, opts.Ref} {
+		if v != "" {
+			n++
+		}
+	}
+	switch n {
+	case 0:
+		return false, nil
+	case 3:
+		return true, nil
+	default:
+		return false, fmt.Errorf("--repo, --commit and --ref must be provided together")
+	}
 }
 
 // Push creates a build upload and streams the file to the returned URL.
@@ -42,6 +69,10 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOpti
 	}
 
 	log.Debug("Artifact is valid.")
+
+	if _, err := gitRefProvided(opts); err != nil {
+		return PushResult{}, err
+	}
 
 	uploadPath := filePath
 	if info.IsDir() {

@@ -15,7 +15,10 @@ type BuildCmd struct {
 
 // BuildPushCmd uploads a build artifact to Semaloop.
 type BuildPushCmd struct {
-	File string `arg:"" help:"Path to the build artifact to upload (.app or .ipa)." type:"path"`
+	File   string `arg:"" help:"Path to the build artifact to upload (.app or .ipa)." type:"path"`
+	Repo   string `help:"Source repository (owner/name) the build was produced from." name:"repo"`
+	Commit string `help:"Commit SHA the build was produced from." name:"commit"`
+	Ref    string `help:"Git ref (e.g. refs/heads/main) the build was produced from." name:"ref"`
 }
 
 func (c *BuildPushCmd) Run(g *Globals) error {
@@ -29,7 +32,12 @@ func (c *BuildPushCmd) Run(g *Globals) error {
 		return nil
 	}
 
-	result, err := icmd.Push(context.Background(), apiKey, client.ServerURL(), c.File, icmd.PushOptions{DryRun: g.DryRun})
+	result, err := icmd.Push(context.Background(), apiKey, client.ServerURL(), c.File, icmd.PushOptions{
+		DryRun: g.DryRun,
+		Repo:   c.Repo,
+		Commit: c.Commit,
+		Ref:    c.Ref,
+	})
 	if err != nil {
 		switch {
 		case errors.Is(err, client.ErrUnauthorized):
