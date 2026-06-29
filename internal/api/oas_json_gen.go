@@ -555,6 +555,136 @@ func (s *FinalizeUploadFailureResponseSuccess) UnmarshalJSON(data []byte) error 
 }
 
 // Encode implements json.Marshaler.
+func (s *FinalizeUploadGitRef) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *FinalizeUploadGitRef) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("commitSha")
+		e.Str(s.CommitSha)
+	}
+	{
+		e.FieldStart("ref")
+		e.Str(s.Ref)
+	}
+	{
+		e.FieldStart("repo")
+		e.Str(s.Repo)
+	}
+}
+
+var jsonFieldsNameOfFinalizeUploadGitRef = [3]string{
+	0: "commitSha",
+	1: "ref",
+	2: "repo",
+}
+
+// Decode decodes FinalizeUploadGitRef from json.
+func (s *FinalizeUploadGitRef) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode FinalizeUploadGitRef to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "commitSha":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.CommitSha = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"commitSha\"")
+			}
+		case "ref":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.Ref = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"ref\"")
+			}
+		case "repo":
+			requiredBitSet[0] |= 1 << 2
+			if err := func() error {
+				v, err := d.Str()
+				s.Repo = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"repo\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode FinalizeUploadGitRef")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000111,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfFinalizeUploadGitRef) {
+					name = jsonFieldsNameOfFinalizeUploadGitRef[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *FinalizeUploadGitRef) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *FinalizeUploadGitRef) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
 func (s *FinalizeUploadSuccessResponse) Encode(e *jx.Encoder) {
 	e.ObjStart()
 	s.encodeFields(e)
@@ -565,7 +695,7 @@ func (s *FinalizeUploadSuccessResponse) Encode(e *jx.Encoder) {
 func (s *FinalizeUploadSuccessResponse) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("appId")
-		s.AppId.Encode(e)
+		e.Str(s.AppId)
 	}
 	{
 		e.FieldStart("bundleId")
@@ -605,7 +735,9 @@ func (s *FinalizeUploadSuccessResponse) Decode(d *jx.Decoder) error {
 		case "appId":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				if err := s.AppId.Decode(d); err != nil {
+				v, err := d.Str()
+				s.AppId = string(v)
+				if err != nil {
 					return err
 				}
 				return nil
@@ -746,48 +878,35 @@ func (s *FinalizeUploadSuccessResponseSuccess) UnmarshalJSON(data []byte) error 
 	return s.Decode(d)
 }
 
-// Encode encodes string as json.
-func (o NilString) Encode(e *jx.Encoder) {
-	if o.Null {
-		e.Null()
+// Encode encodes FinalizeUploadGitRef as json.
+func (o OptFinalizeUploadGitRef) Encode(e *jx.Encoder) {
+	if !o.Set {
 		return
 	}
-	e.Str(string(o.Value))
+	o.Value.Encode(e)
 }
 
-// Decode decodes string from json.
-func (o *NilString) Decode(d *jx.Decoder) error {
+// Decode decodes FinalizeUploadGitRef from json.
+func (o *OptFinalizeUploadGitRef) Decode(d *jx.Decoder) error {
 	if o == nil {
-		return errors.New("invalid: unable to decode NilString to nil")
+		return errors.New("invalid: unable to decode OptFinalizeUploadGitRef to nil")
 	}
-	if d.Next() == jx.Null {
-		if err := d.Null(); err != nil {
-			return err
-		}
-
-		var v string
-		o.Value = v
-		o.Null = true
-		return nil
-	}
-	o.Null = false
-	v, err := d.Str()
-	if err != nil {
+	o.Set = true
+	if err := o.Value.Decode(d); err != nil {
 		return err
 	}
-	o.Value = string(v)
 	return nil
 }
 
 // MarshalJSON implements stdjson.Marshaler.
-func (s NilString) MarshalJSON() ([]byte, error) {
+func (s OptFinalizeUploadGitRef) MarshalJSON() ([]byte, error) {
 	e := jx.Encoder{}
 	s.Encode(&e)
 	return e.Bytes(), nil
 }
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *NilString) UnmarshalJSON(data []byte) error {
+func (s *OptFinalizeUploadGitRef) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -1047,6 +1166,44 @@ func (s *PostCreateUploadUnauthorized) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
+// Encode encodes PostFinalizeUploadBadRequest as json.
+func (s *PostFinalizeUploadBadRequest) Encode(e *jx.Encoder) {
+	unwrapped := (*ErrorResponse)(s)
+
+	unwrapped.Encode(e)
+}
+
+// Decode decodes PostFinalizeUploadBadRequest from json.
+func (s *PostFinalizeUploadBadRequest) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode PostFinalizeUploadBadRequest to nil")
+	}
+	var unwrapped ErrorResponse
+	if err := func() error {
+		if err := unwrapped.Decode(d); err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return errors.Wrap(err, "alias")
+	}
+	*s = PostFinalizeUploadBadRequest(unwrapped)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *PostFinalizeUploadBadRequest) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *PostFinalizeUploadBadRequest) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode encodes PostFinalizeUploadForbidden as json.
 func (s *PostFinalizeUploadForbidden) Encode(e *jx.Encoder) {
 	unwrapped := (*ErrorResponse)(s)
@@ -1133,13 +1290,20 @@ func (s *PostFinalizeUploadReq) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *PostFinalizeUploadReq) encodeFields(e *jx.Encoder) {
 	{
+		if s.GitRef.Set {
+			e.FieldStart("gitRef")
+			s.GitRef.Encode(e)
+		}
+	}
+	{
 		e.FieldStart("id")
 		e.Str(s.ID)
 	}
 }
 
-var jsonFieldsNameOfPostFinalizeUploadReq = [1]string{
-	0: "id",
+var jsonFieldsNameOfPostFinalizeUploadReq = [2]string{
+	0: "gitRef",
+	1: "id",
 }
 
 // Decode decodes PostFinalizeUploadReq from json.
@@ -1151,8 +1315,18 @@ func (s *PostFinalizeUploadReq) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
+		case "gitRef":
+			if err := func() error {
+				s.GitRef.Reset()
+				if err := s.GitRef.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"gitRef\"")
+			}
 		case "id":
-			requiredBitSet[0] |= 1 << 0
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				v, err := d.Str()
 				s.ID = string(v)
@@ -1173,7 +1347,7 @@ func (s *PostFinalizeUploadReq) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000001,
+		0b00000010,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

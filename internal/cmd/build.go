@@ -25,6 +25,13 @@ type PushOptions struct {
 	// DryRun performs all local input validation and packaging but skips every
 	// network call (create upload, PUT file, finalize).
 	DryRun bool
+
+	// Repo, Commit and Ref capture the git context the build was produced from.
+	// They are optional and all-or-nothing — the CLI's `and:"gitref"` flag group
+	// enforces that at parse time, so Push only needs to send them when present.
+	Repo   string
+	Commit string
+	Ref    string
 }
 
 // Push creates a build upload and streams the file to the returned URL.
@@ -95,9 +102,16 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOpti
 
 	log.Debug("Finalizing upload.", "upload_id", createRes.Result.UploadId)
 
-	finalizeRes, err := c.PostFinalizeUpload(ctx, api.NewOptPostFinalizeUploadReq(api.PostFinalizeUploadReq{
-		ID: createRes.Result.UploadId,
-	}))
+	finalizeReq := api.PostFinalizeUploadReq{ID: createRes.Result.UploadId}
+	if opts.Repo != "" && opts.Commit != "" && opts.Ref != "" {
+		finalizeReq.GitRef = api.NewOptFinalizeUploadGitRef(api.FinalizeUploadGitRef{
+			Repo:      opts.Repo,
+			CommitSha: opts.Commit,
+			Ref:       opts.Ref,
+		})
+	}
+
+	finalizeRes, err := c.PostFinalizeUpload(ctx, api.NewOptPostFinalizeUploadReq(finalizeReq))
 	if err != nil {
 		return PushResult{}, fmt.Errorf("could not finalize upload: %w", err)
 	}
@@ -121,6 +135,13 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOpti
 		logger.Errorf("Finalizing upload failed: %s.", r.Message)
 
 		return PushResult{}, fmt.Errorf("finalize failed: %s", r.Message)
+	case *api.PostFinalizeUploadBadRequest:
+		// The CLI validates the git ref before sending, so this is defensive.
+		msg := "bad request"
+		if len(r.Errors) > 0 && r.Errors[0].Message != "" {
+			msg = r.Errors[0].Message
+		}
+		return PushResult{}, fmt.Errorf("finalize rejected: %s", msg)
 	case *api.PostFinalizeUploadUnauthorized:
 		return PushResult{}, client.ErrUnauthorized
 	case *api.PostFinalizeUploadForbidden:

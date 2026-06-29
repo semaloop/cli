@@ -107,6 +107,8 @@ type pushServer struct {
 	uploadStatus   int
 	finalizeStatus int
 	finalizeBody   string
+	// onFinalize, if set, receives the raw finalize request body.
+	onFinalize func([]byte)
 }
 
 func (ps pushServer) start(t *testing.T) *httptest.Server {
@@ -121,6 +123,10 @@ func (ps pushServer) start(t *testing.T) *httptest.Server {
 		case r.Method == http.MethodPut && r.URL.Path == "/upload":
 			w.WriteHeader(ps.uploadStatus)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/uploads/finalize":
+			if ps.onFinalize != nil {
+				b, _ := io.ReadAll(r.Body)
+				ps.onFinalize(b)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(ps.finalizeStatus)
 			fmt.Fprint(w, ps.finalizeBody)
@@ -470,6 +476,72 @@ func TestPushFinalizeNotFound(t *testing.T) {
 	_, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{})
 	if err == nil || !strings.Contains(err.Error(), "upload not found") {
 		t.Errorf("expected 'upload not found' error, got %v", err)
+	}
+}
+
+// TestPushAllGitRefSent verifies a complete git ref is sent on the finalize
+// request, with --commit mapped to commitSha.
+func TestPushAllGitRefSent(t *testing.T) {
+	const uploadID = "git-1"
+	var finalizeBody []byte
+	srv := pushServer{
+		createStatus:   http.StatusOK,
+		createBody:     func(u string) string { return createOKBody(uploadID, u) },
+		uploadStatus:   http.StatusOK,
+		finalizeStatus: http.StatusOK,
+		finalizeBody:   finalizeOKBody(),
+		onFinalize:     func(b []byte) { finalizeBody = b },
+	}.start(t)
+
+	result, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{
+		Repo:   "owner/name",
+		Commit: "abc123",
+		Ref:    "refs/heads/main",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.UploadID != uploadID {
+		t.Errorf("expected UploadID %q, got %q", uploadID, result.UploadID)
+	}
+
+	var sent struct {
+		ID     string `json:"id"`
+		GitRef *struct {
+			Repo      string `json:"repo"`
+			CommitSha string `json:"commitSha"`
+			Ref       string `json:"ref"`
+		} `json:"gitRef"`
+	}
+	if err := json.Unmarshal(finalizeBody, &sent); err != nil {
+		t.Fatalf("could not parse finalize body %q: %v", finalizeBody, err)
+	}
+	if sent.GitRef == nil {
+		t.Fatalf("expected gitRef in finalize body, got %q", finalizeBody)
+	}
+	if sent.GitRef.Repo != "owner/name" || sent.GitRef.CommitSha != "abc123" || sent.GitRef.Ref != "refs/heads/main" {
+		t.Errorf("unexpected gitRef: %+v", *sent.GitRef)
+	}
+}
+
+// TestPushNoGitRefOmitted verifies a push without git flags sends no gitRef key,
+// keeping the finalize request byte-for-byte compatible with prior behaviour.
+func TestPushNoGitRefOmitted(t *testing.T) {
+	var finalizeBody []byte
+	srv := pushServer{
+		createStatus:   http.StatusOK,
+		createBody:     func(u string) string { return createOKBody("id-1", u) },
+		uploadStatus:   http.StatusOK,
+		finalizeStatus: http.StatusOK,
+		finalizeBody:   finalizeOKBody(),
+		onFinalize:     func(b []byte) { finalizeBody = b },
+	}.start(t)
+
+	if _, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(string(finalizeBody), "gitRef") {
+		t.Errorf("expected no gitRef key in finalize body, got %q", finalizeBody)
 	}
 }
 

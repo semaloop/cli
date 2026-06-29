@@ -21,7 +21,7 @@ func trimTrailingSlashes(u *url.URL) {
 type Invoker interface {
 	// PostCreateUpload invokes post_CreateUpload operation.
 	//
-	// Create a build upload.
+	// Create a simulator build upload.
 	//
 	// POST /api/v1/uploads
 	PostCreateUpload(ctx context.Context) (PostCreateUploadRes, error)
@@ -74,7 +74,7 @@ func (c *Client) requestURL(ctx context.Context) *url.URL {
 
 // PostCreateUpload invokes post_CreateUpload operation.
 //
-// Create a build upload.
+// Create a simulator build upload.
 //
 // POST /api/v1/uploads
 func (c *Client) PostCreateUpload(ctx context.Context) (PostCreateUploadRes, error) {
