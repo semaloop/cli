@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/semaloop/cli/compare/v1.4.0...v1.5.0) (2026-06-29)
+
+
+### Features
+
+* add optional --git-repo, --git-commit and --git-ref flags to build push ([#11](https://github.com/semaloop/cli/issues/11)) ([4f72c17](https://github.com/semaloop/cli/commit/4f72c17926719d0739ba068471676c3bb3194be5))
+
 # [1.4.0](https://github.com/semaloop/cli/compare/v1.3.0...v1.4.0) (2026-06-22)
 
 
