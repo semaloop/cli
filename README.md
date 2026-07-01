@@ -30,7 +30,14 @@ For help on using `semaloop`, run:
 semaloop --help
 ```
 
-## Continuous integration
+## Features
+
+The Semaloop CLI supports:
+
+- `semaloop auth`: Authenticate with the Semaloop API.
+- `semaloop build push`: Push an iOS build artifact (`.app` or `.ipa`) for testing.
+
+### Continuous integration
 
 Push builds from your CI pipeline with their git context so Semaloop can test each one and report the results back to your repository as a status check on the commit or pull request:
 
@@ -43,7 +50,7 @@ semaloop build push path/to/YourApp.app \
 
 `--git-repo`, `--git-commit`, and `--git-ref` tell Semaloop which commit the build came from, so the status check lands on the right place. `--git-repo` must be a repository you've connected in the Semaloop dashboard. Pass all three or none.
 
-### GitHub Actions example
+#### GitHub Actions example
 
 ```yaml
 - run: brew install semaloop/tap/semaloop
@@ -58,13 +65,6 @@ semaloop build push path/to/YourApp.app \
 ```
 
 This works for both pushes and pull requests — on a PR it stamps the PR's head commit so the check appears on the pull request.
-
-## Features
-
-The Semaloop CLI supports:
-
-- `semaloop auth`: Authenticate with the Semaloop API.
-- `semaloop build push`: Push an iOS build artifact (`.app` or `.ipa`) for testing.
 
 ## Contributing
 
