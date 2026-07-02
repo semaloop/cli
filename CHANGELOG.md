@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/semaloop/cli/compare/v1.5.0...v1.6.0) (2026-07-02)
+
+
+### Features
+
+* Add --allow-duplicate-version flag to build push ([#13](https://github.com/semaloop/cli/issues/13)) ([df845be](https://github.com/semaloop/cli/commit/df845be9cbda6217bc52429b9b8b8d72fd9cbffb))
+
 # [1.5.0](https://github.com/semaloop/cli/compare/v1.4.0...v1.5.0) (2026-06-29)
 
 
