@@ -32,6 +32,11 @@ type PushOptions struct {
 	Repo   string
 	Commit string
 	Ref    string
+
+	// AllowDuplicateVersion accepts an upload whose (bundle, version label,
+	// version name) already exists, recording it as a distinct build instead
+	// of rejecting it. Defaults to false.
+	AllowDuplicateVersion bool
 }
 
 // Push creates a build upload and streams the file to the returned URL.
@@ -102,7 +107,10 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOpti
 
 	log.Debug("Finalizing upload.", "upload_id", createRes.Result.UploadId)
 
-	finalizeReq := api.PostFinalizeUploadReq{ID: createRes.Result.UploadId}
+	finalizeReq := api.PostFinalizeUploadReq{
+		ID:                    createRes.Result.UploadId,
+		AllowDuplicateVersion: api.NewOptBool(opts.AllowDuplicateVersion),
+	}
 	if opts.Repo != "" && opts.Commit != "" && opts.Ref != "" {
 		finalizeReq.GitRef = api.NewOptFinalizeUploadGitRef(api.FinalizeUploadGitRef{
 			Repo:      opts.Repo,

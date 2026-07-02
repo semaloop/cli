@@ -269,6 +269,52 @@ func (FinalizeUploadSuccessResponseSuccess) AllValues() []FinalizeUploadSuccessR
 	}
 }
 
+// NewOptBool returns new OptBool with value set to v.
+func NewOptBool(v bool) OptBool {
+	return OptBool{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptBool is optional bool.
+type OptBool struct {
+	Value bool
+	Set   bool
+}
+
+// IsSet returns true if OptBool was set.
+func (o OptBool) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptBool) Reset() {
+	var v bool
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptBool) SetTo(v bool) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptBool) Get() (v bool, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptBool) Or(d bool) bool {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptFinalizeUploadGitRef returns new OptFinalizeUploadGitRef with value set to v.
 func NewOptFinalizeUploadGitRef(v FinalizeUploadGitRef) OptFinalizeUploadGitRef {
 	return OptFinalizeUploadGitRef{
@@ -455,9 +501,17 @@ type PostFinalizeUploadNotFound ErrorResponse
 func (*PostFinalizeUploadNotFound) postFinalizeUploadRes() {}
 
 type PostFinalizeUploadReq struct {
-	GitRef OptFinalizeUploadGitRef `json:"gitRef"`
+	// When true, accept an upload whose (bundle, version label, version name) already exists, recording
+	// it as a distinct build instead of rejecting it. Defaults to false.
+	AllowDuplicateVersion OptBool                 `json:"allowDuplicateVersion"`
+	GitRef                OptFinalizeUploadGitRef `json:"gitRef"`
 	// Upload ID returned by POST /api/v1/uploads.
 	ID string `json:"id"`
+}
+
+// GetAllowDuplicateVersion returns the value of AllowDuplicateVersion.
+func (s *PostFinalizeUploadReq) GetAllowDuplicateVersion() OptBool {
+	return s.AllowDuplicateVersion
 }
 
 // GetGitRef returns the value of GitRef.
@@ -468,6 +522,11 @@ func (s *PostFinalizeUploadReq) GetGitRef() OptFinalizeUploadGitRef {
 // GetID returns the value of ID.
 func (s *PostFinalizeUploadReq) GetID() string {
 	return s.ID
+}
+
+// SetAllowDuplicateVersion sets the value of AllowDuplicateVersion.
+func (s *PostFinalizeUploadReq) SetAllowDuplicateVersion(val OptBool) {
+	s.AllowDuplicateVersion = val
 }
 
 // SetGitRef sets the value of GitRef.

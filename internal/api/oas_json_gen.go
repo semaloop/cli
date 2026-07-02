@@ -878,6 +878,41 @@ func (s *FinalizeUploadSuccessResponseSuccess) UnmarshalJSON(data []byte) error 
 	return s.Decode(d)
 }
 
+// Encode encodes bool as json.
+func (o OptBool) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	e.Bool(bool(o.Value))
+}
+
+// Decode decodes bool from json.
+func (o *OptBool) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptBool to nil")
+	}
+	o.Set = true
+	v, err := d.Bool()
+	if err != nil {
+		return err
+	}
+	o.Value = bool(v)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptBool) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptBool) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode encodes FinalizeUploadGitRef as json.
 func (o OptFinalizeUploadGitRef) Encode(e *jx.Encoder) {
 	if !o.Set {
@@ -1290,6 +1325,12 @@ func (s *PostFinalizeUploadReq) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *PostFinalizeUploadReq) encodeFields(e *jx.Encoder) {
 	{
+		if s.AllowDuplicateVersion.Set {
+			e.FieldStart("allowDuplicateVersion")
+			s.AllowDuplicateVersion.Encode(e)
+		}
+	}
+	{
 		if s.GitRef.Set {
 			e.FieldStart("gitRef")
 			s.GitRef.Encode(e)
@@ -1301,9 +1342,10 @@ func (s *PostFinalizeUploadReq) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfPostFinalizeUploadReq = [2]string{
-	0: "gitRef",
-	1: "id",
+var jsonFieldsNameOfPostFinalizeUploadReq = [3]string{
+	0: "allowDuplicateVersion",
+	1: "gitRef",
+	2: "id",
 }
 
 // Decode decodes PostFinalizeUploadReq from json.
@@ -1312,9 +1354,20 @@ func (s *PostFinalizeUploadReq) Decode(d *jx.Decoder) error {
 		return errors.New("invalid: unable to decode PostFinalizeUploadReq to nil")
 	}
 	var requiredBitSet [1]uint8
+	s.setDefaults()
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
+		case "allowDuplicateVersion":
+			if err := func() error {
+				s.AllowDuplicateVersion.Reset()
+				if err := s.AllowDuplicateVersion.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"allowDuplicateVersion\"")
+			}
 		case "gitRef":
 			if err := func() error {
 				s.GitRef.Reset()
@@ -1326,7 +1379,7 @@ func (s *PostFinalizeUploadReq) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"gitRef\"")
 			}
 		case "id":
-			requiredBitSet[0] |= 1 << 1
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.ID = string(v)
@@ -1347,7 +1400,7 @@ func (s *PostFinalizeUploadReq) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000010,
+		0b00000100,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

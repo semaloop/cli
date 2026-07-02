@@ -545,6 +545,64 @@ func TestPushNoGitRefOmitted(t *testing.T) {
 	}
 }
 
+// TestPushAllowDuplicateVersionDefaultFalse verifies that allowDuplicateVersion
+// defaults to false when the flag is not set.
+func TestPushAllowDuplicateVersionDefaultFalse(t *testing.T) {
+	var finalizeBody []byte
+	srv := pushServer{
+		createStatus:   http.StatusOK,
+		createBody:     func(u string) string { return createOKBody("id-1", u) },
+		uploadStatus:   http.StatusOK,
+		finalizeStatus: http.StatusOK,
+		finalizeBody:   finalizeOKBody(),
+		onFinalize:     func(b []byte) { finalizeBody = b },
+	}.start(t)
+
+	if _, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var sent struct {
+		AllowDuplicateVersion bool `json:"allowDuplicateVersion"`
+	}
+	if err := json.Unmarshal(finalizeBody, &sent); err != nil {
+		t.Fatalf("could not parse finalize body %q: %v", finalizeBody, err)
+	}
+	if sent.AllowDuplicateVersion {
+		t.Errorf("expected allowDuplicateVersion to be false, got %q", finalizeBody)
+	}
+}
+
+// TestPushAllowDuplicateVersionSent verifies that setting AllowDuplicateVersion
+// sends allowDuplicateVersion: true on the finalize request.
+func TestPushAllowDuplicateVersionSent(t *testing.T) {
+	var finalizeBody []byte
+	srv := pushServer{
+		createStatus:   http.StatusOK,
+		createBody:     func(u string) string { return createOKBody("id-1", u) },
+		uploadStatus:   http.StatusOK,
+		finalizeStatus: http.StatusOK,
+		finalizeBody:   finalizeOKBody(),
+		onFinalize:     func(b []byte) { finalizeBody = b },
+	}.start(t)
+
+	if _, err := Push(context.Background(), "key", srv.URL, makeAppBundle(t), PushOptions{
+		AllowDuplicateVersion: true,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var sent struct {
+		AllowDuplicateVersion bool `json:"allowDuplicateVersion"`
+	}
+	if err := json.Unmarshal(finalizeBody, &sent); err != nil {
+		t.Fatalf("could not parse finalize body %q: %v", finalizeBody, err)
+	}
+	if !sent.AllowDuplicateVersion {
+		t.Errorf("expected allowDuplicateVersion to be true, got %q", finalizeBody)
+	}
+}
+
 func writeTempFile(t *testing.T, content string) string {
 	t.Helper()
 	f, err := os.CreateTemp(t.TempDir(), "upload-*")
