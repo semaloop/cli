@@ -39,3 +39,31 @@ func TestBuildPushGitFlagsAllOrNone(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildPushAllowDuplicateVersionFlag verifies --allow-duplicate-version
+// defaults to false and is set to true when passed.
+func TestBuildPushAllowDuplicateVersionFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"default", []string{"build", "push", "App.app"}, false},
+		{"flag set", []string{"build", "push", "App.app", "--allow-duplicate-version"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cli CLI
+			parser, err := kong.New(&cli, kong.Vars{"version": "test"}, kong.Exit(func(int) {}))
+			if err != nil {
+				t.Fatalf("could not build parser: %v", err)
+			}
+			if _, err := parser.Parse(tt.args); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cli.Build.Push.AllowDuplicateVersion != tt.want {
+				t.Errorf("args=%v: want AllowDuplicateVersion=%v, got %v", tt.args, tt.want, cli.Build.Push.AllowDuplicateVersion)
+			}
+		})
+	}
+}
