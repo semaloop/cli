@@ -50,7 +50,9 @@ runs:
   steps:
     - name: Mask API key
       shell: bash
-      run: echo "::add-mask::${{ inputs.api-key }}"
+      env:
+        API_KEY: ${{ inputs.api-key }}
+      run: echo "::add-mask::$API_KEY"
 
     - name: Install semaloop CLI
       shell: bash
@@ -78,14 +80,35 @@ runs:
         esac
 
         if [ "$SEMALOOP_VERSION" = "latest" ]; then
-          url="https://github.com/semaloop/cli/releases/latest/download/cli_${os}_${arch}.tar.gz"
+          # Resolve the redirect from /releases/latest to /releases/tag/<tag> rather
+          # than calling the GitHub API, which is subject to a much lower unauthenticated
+          # rate limit on shared GitHub-hosted runners.
+          tag=$(curl -sSfL -o /dev/null -w '%{url_effective}' "https://github.com/semaloop/cli/releases/latest")
+          tag="${tag##*/}"
         else
-          url="https://github.com/semaloop/cli/releases/download/v${SEMALOOP_VERSION#v}/cli_${os}_${arch}.tar.gz"
+          tag="v${SEMALOOP_VERSION#v}"
         fi
+        version="${tag#v}"
+        archive="cli_${os}_${arch}.tar.gz"
+        checksums="cli_${version}_checksums.txt"
+        base_url="https://github.com/semaloop/cli/releases/download/${tag}"
 
         install_dir="${RUNNER_TEMP}/semaloop-cli"
         mkdir -p "$install_dir"
-        curl -sSfL "$url" -o "$install_dir/cli.tar.gz"
+        curl -sSfL "${base_url}/${archive}" -o "$install_dir/cli.tar.gz"
+        curl -sSfL "${base_url}/${checksums}" -o "$install_dir/checksums.txt"
+
+        expected=$(grep " ${archive}\$" "$install_dir/checksums.txt" | awk '{print $1}')
+        if [ -z "$expected" ]; then
+          echo "::error::Could not find a checksum for ${archive} in ${checksums}." >&2
+          exit 1
+        fi
+        actual=$(shasum -a 256 "$install_dir/cli.tar.gz" | awk '{print $1}')
+        if [ "$expected" != "$actual" ]; then
+          echo "::error::Checksum mismatch for ${archive}: expected $expected, got $actual." >&2
+          exit 1
+        fi
+
         tar -xzf "$install_dir/cli.tar.gz" -C "$install_dir" semaloop
         chmod +x "$install_dir/semaloop"
         echo "$install_dir" >> "$GITHUB_PATH"
@@ -95,18 +118,33 @@ runs:
       shell: bash
       env:
         SEMALOOP_API_KEY: ${{ inputs.api-key }}
+        BUILD_PATH: ${{ inputs.path }}
+        GIT_REPO: ${{ inputs.git-repo }}
+        GIT_COMMIT: ${{ inputs.git-commit }}
+        GIT_REF: ${{ inputs.git-ref }}
+        ALLOW_DUPLICATE_VERSION: ${{ inputs.allow-duplicate-version }}
+        DRY_RUN: ${{ inputs.dry-run }}
       run: |
         set -euo pipefail
 
         args=(--json)
-        if [ "${{ inputs.dry-run }}" = "true" ]; then
+        if [ "$DRY_RUN" = "true" ]; then
           args+=(--dry-run)
         fi
-        args+=(build push "${{ inputs.path }}")
-        if [ -n "${{ inputs.git-repo }}" ]; then
-          args+=(--git-repo "${{ inputs.git-repo }}" --git-commit "${{ inputs.git-commit }}" --git-ref "${{ inputs.git-ref }}")
+        args+=(build push "$BUILD_PATH")
+
+        git_count=0
+        [ -n "$GIT_REPO" ] && git_count=$((git_count + 1))
+        [ -n "$GIT_COMMIT" ] && git_count=$((git_count + 1))
+        [ -n "$GIT_REF" ] && git_count=$((git_count + 1))
+        if [ "$git_count" -eq 3 ]; then
+          args+=(--git-repo "$GIT_REPO" --git-commit "$GIT_COMMIT" --git-ref "$GIT_REF")
+        elif [ "$git_count" -ne 0 ]; then
+          echo "::error::git-repo, git-commit and git-ref must be passed together (all three or none); got ${git_count} of 3." >&2
+          exit 1
         fi
-        if [ "${{ inputs.allow-duplicate-version }}" = "true" ]; then
+
+        if [ "$ALLOW_DUPLICATE_VERSION" = "true" ]; then
           args+=(--allow-duplicate-version)
         fi
 
@@ -116,7 +154,7 @@ runs:
         log_file="${RUNNER_TEMP}/semaloop-build-push.jsonl"
         semaloop "${args[@]}" 2>&1 | tee "$log_file"
 
-        upload_id=$(jq -R -r 'fromjson? | select(.msg == "Build uploaded successfully.") | .id // empty' "$log_file" | tail -n1)
+        upload_id=$(jq -R -r 'fromjson? | select(.event == "build_push_succeeded") | .id // empty' "$log_file" | tail -n1)
         if [ -n "$upload_id" ]; then
           echo "upload-id=$upload_id" >> "$GITHUB_OUTPUT"
         fi

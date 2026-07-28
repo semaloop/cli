@@ -57,7 +57,7 @@ func (c *BuildPushCmd) Run(g *Globals) error {
 	if g.DryRun {
 		log.Info("Dry run complete. No upload performed.")
 	} else {
-		log.Info("Build uploaded successfully.", "id", result.UploadID)
+		log.Info("Build uploaded successfully.", "event", "build_push_succeeded", "id", result.UploadID)
 	}
 	return nil
 }
