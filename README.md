@@ -53,18 +53,17 @@ semaloop build push path/to/YourApp.app \
 #### GitHub Actions Example
 
 ```yaml
-- run: brew install semaloop/tap/semaloop
-- name: Push build to Semaloop
-  env:
-    SEMALOOP_API_KEY: ${{ secrets.SEMALOOP_API_KEY }}
-  run: |
-    semaloop build push "$PWD/build/YourApp.app" \
-      --git-repo "${{ github.repository }}" \
-      --git-commit "${{ github.event.pull_request.head.sha || github.sha }}" \
-      --git-ref "${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}"
+- uses: semaloop/cli/actions/build-push@v1
+  with:
+    path: build/YourApp.app
+    api-key: ${{ secrets.SEMALOOP_API_KEY }}
 ```
 
-This works for both pushes and pull requests — on a PR it stamps the PR's head commit so the check appears on the pull request.
+`git-repo`, `git-commit` and `git-ref` default to the current repository and
+commit, so this works for both pushes and pull requests out of the box — on a
+PR it stamps the PR's head commit so the check appears on the pull request.
+See [`actions/build-push`](./actions/build-push/action.yml) for the full list
+of inputs and outputs.
 
 ## Contributing
 

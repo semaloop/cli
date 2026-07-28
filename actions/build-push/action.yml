@@ -1,0 +1,122 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: 'Semaloop: push build'
+description: 'Upload an iOS build artifact to Semaloop for continuous testing'
+author: 'Semaloop'
+
+inputs:
+  path:
+    description: 'Path to the build artifact to upload (.app or .ipa).'
+    required: true
+  api-key:
+    description: 'Semaloop API key. Store this as a repository or organization secret.'
+    required: true
+  version:
+    description: 'Version of the semaloop CLI to install, e.g. "1.6.0". Defaults to the latest release.'
+    required: false
+    default: 'latest'
+  git-repo:
+    description: >
+      Source repository (owner/name) the build was produced from. Defaults to
+      the current repository. git-repo, git-commit and git-ref must be passed
+      as an empty string together to omit git context from the upload.
+    required: false
+    default: ${{ github.repository }}
+  git-commit:
+    description: 'Commit SHA the build was produced from. Defaults to the current run''s commit.'
+    required: false
+    default: ${{ github.event.pull_request.head.sha || github.sha }}
+  git-ref:
+    description: 'Git ref the build was produced from. Defaults to the current run''s ref.'
+    required: false
+    default: ${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}
+  allow-duplicate-version:
+    description: >
+      Accept an upload whose bundle, version label, and version name already
+      exist, recording it as a distinct build instead of rejecting it.
+    required: false
+    default: 'false'
+  dry-run:
+    description: 'Validate inputs but skip all network calls.'
+    required: false
+    default: 'false'
+
+outputs:
+  upload-id:
+    description: 'The id of the created upload. Empty on a dry run.'
+    value: ${{ steps.push.outputs.upload-id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Mask API key
+      shell: bash
+      run: echo "::add-mask::${{ inputs.api-key }}"
+
+    - name: Install semaloop CLI
+      shell: bash
+      env:
+        SEMALOOP_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        case "${{ runner.os }}" in
+          Linux) os=Linux ;;
+          macOS) os=Darwin ;;
+          *)
+            echo "::error::The semaloop/cli build-push action does not support ${{ runner.os }} runners yet. Use Linux or macOS." >&2
+            exit 1
+            ;;
+        esac
+
+        case "${{ runner.arch }}" in
+          X64) arch=x86_64 ;;
+          ARM64) arch=arm64 ;;
+          *)
+            echo "::error::The semaloop/cli build-push action does not support ${{ runner.arch }} runners yet." >&2
+            exit 1
+            ;;
+        esac
+
+        if [ "$SEMALOOP_VERSION" = "latest" ]; then
+          url="https://github.com/semaloop/cli/releases/latest/download/cli_${os}_${arch}.tar.gz"
+        else
+          url="https://github.com/semaloop/cli/releases/download/v${SEMALOOP_VERSION#v}/cli_${os}_${arch}.tar.gz"
+        fi
+
+        install_dir="${RUNNER_TEMP}/semaloop-cli"
+        mkdir -p "$install_dir"
+        curl -sSfL "$url" -o "$install_dir/cli.tar.gz"
+        tar -xzf "$install_dir/cli.tar.gz" -C "$install_dir" semaloop
+        chmod +x "$install_dir/semaloop"
+        echo "$install_dir" >> "$GITHUB_PATH"
+
+    - name: Push build
+      id: push
+      shell: bash
+      env:
+        SEMALOOP_API_KEY: ${{ inputs.api-key }}
+      run: |
+        set -euo pipefail
+
+        args=(--json)
+        if [ "${{ inputs.dry-run }}" = "true" ]; then
+          args+=(--dry-run)
+        fi
+        args+=(build push "${{ inputs.path }}")
+        if [ -n "${{ inputs.git-repo }}" ]; then
+          args+=(--git-repo "${{ inputs.git-repo }}" --git-commit "${{ inputs.git-commit }}" --git-ref "${{ inputs.git-ref }}")
+        fi
+        if [ "${{ inputs.allow-duplicate-version }}" = "true" ]; then
+          args+=(--allow-duplicate-version)
+        fi
+
+        # semaloop logs one line before parsing --json (see cmd/semaloop/main.go),
+        # so the log isn't pure JSONL; `jq -R 'fromjson?'` skips that non-JSON line
+        # instead of aborting on it.
+        log_file="${RUNNER_TEMP}/semaloop-build-push.jsonl"
+        semaloop "${args[@]}" 2>&1 | tee "$log_file"
+
+        upload_id=$(jq -R -r 'fromjson? | select(.msg == "Build uploaded successfully.") | .id // empty' "$log_file" | tail -n1)
+        if [ -n "$upload_id" ]; then
+          echo "upload-id=$upload_id" >> "$GITHUB_OUTPUT"
+        fi
