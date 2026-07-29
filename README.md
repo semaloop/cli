@@ -36,7 +36,7 @@ The following sections describe the commands supported by the `semaloop` CLI. Fo
 
 ### `semaloop auth`
 
-Allows you to authenticate with Semaloop using an API ke, and remove any existing stored credentials.
+Allows you to authenticate with Semaloop using an API key, and remove any existing stored credentials.
 
 ### `semaloop build push`
 
