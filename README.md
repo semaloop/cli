@@ -59,11 +59,7 @@ semaloop build push path/to/YourApp.app \
     api-key: ${{ secrets.SEMALOOP_API_KEY }}
 ```
 
-`git-repo`, `git-commit` and `git-ref` default to the current repository and
-commit, so this works for both pushes and pull requests out of the box — on a
-PR it stamps the PR's head commit so the check appears on the pull request.
-See [`actions/build-push`](./actions/build-push/action.yml) for the full list
-of inputs and outputs.
+`git-repo`, `git-commit` and `git-ref` default to the current repository and commit, so this works for both pushes and pull requests out of the box — on a PR it stamps the PR's head commit so the check appears on the pull request. See [`actions/build-push`](./actions/build-push/action.yml) for the full list of inputs and outputs.
 
 ## Contributing
 
