@@ -32,25 +32,27 @@ semaloop --help
 
 ## Features
 
-The Semaloop CLI supports:
+The following sections describe the commands supported by the `semaloop` CLI. For a full description of each command, run `semaloop --help`.
 
-- `semaloop auth`: Authenticate with the Semaloop API.
-- `semaloop build push`: Push an iOS build artifact (`.app` or `.ipa`) for testing.
+### `semaloop auth`
 
-### Continuous Integration
+Allows you to authenticate with Semaloop using an API key, and remove any existing stored credentials.
 
-Push builds from your CI pipeline with their git context so Semaloop can test each one and report the results back to your repository as a status check on the commit or pull request:
+### `semaloop build push`
 
-```
-semaloop build push path/to/YourApp.app \
-  --git-repo "owner/repo" \
-  --git-commit "<commit-sha>" \
-  --git-ref "refs/heads/your-branch"
-```
+Allows you to push an iOS build artifact (`.app` or `.ipa`) for testing.
 
-`--git-repo`, `--git-commit`, and `--git-ref` tell Semaloop which commit the build came from, so the status check lands on the right place. `--git-repo` must be a repository you've connected in the Semaloop dashboard. Pass all three or none.
+You can specify `--git-repo`, `--git-commit` and `--git-ref`, which allows Semaloop to report the results back as a status check on the commit or pull request. You must have connected your repository to Semaloop via our web dashboard for this to work. All three arguments must be specified.
 
-#### GitHub Actions Example
+## GitHub Actions
+
+Some of the `semaloop cli` commands come with a pre-packaged GitHub Action that you can drop in to your GitHub workflows.
+
+## `semaloop/cli/actions/build-push`
+
+Allows a build to be pushed to Semaloop. Arguments like `--git-repo` are deduced automatically. See [`actions/build-push`](./actions/build-push/action.yml) for the full list of inputs and outputs.
+
+### Example
 
 ```yaml
 - uses: semaloop/cli/actions/build-push@v1
@@ -58,12 +60,6 @@ semaloop build push path/to/YourApp.app \
     path: build/YourApp.app
     api-key: ${{ secrets.SEMALOOP_API_KEY }}
 ```
-
-`git-repo`, `git-commit` and `git-ref` default to the current repository and
-commit, so this works for both pushes and pull requests out of the box — on a
-PR it stamps the PR's head commit so the check appears on the pull request.
-See [`actions/build-push`](./actions/build-push/action.yml) for the full list
-of inputs and outputs.
 
 ## Contributing
 
