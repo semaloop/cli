@@ -49,6 +49,10 @@ runs:
   using: composite
   steps:
     - name: Mask API key
+      # Registers the key with the runner's log redaction via the ::add-mask::
+      # workflow command, so it's replaced with *** in any step output below
+      # (e.g. if the CLI ever echoes it back in an error message).
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log
       shell: bash
       env:
         API_KEY: ${{ inputs.api-key }}
