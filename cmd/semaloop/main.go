@@ -51,9 +51,7 @@ func main() {
 	}
 
 	if err := ctx.Run(); err != nil {
-		if !cli.Quiet {
-			ctx.FatalIfErrorf(err)
-		}
+		log.Error(err.Error())
 		os.Exit(1)
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -65,5 +66,16 @@ func TestBuildPushAllowDuplicateVersionFlag(t *testing.T) {
 				t.Errorf("args=%v: want AllowDuplicateVersion=%v, got %v", tt.args, tt.want, cli.Build.Push.AllowDuplicateVersion)
 			}
 		})
+	}
+}
+
+// TestBuildPushCmdRunReturnsErrorOnFailure guards against Run swallowing a
+// push failure and returning nil, which would make `semaloop build push`
+// exit 0 in CI even though the upload never happened.
+func TestBuildPushCmdRunReturnsErrorOnFailure(t *testing.T) {
+	t.Setenv("SEMALOOP_API_KEY", "test-key")
+	cmd := &BuildPushCmd{File: filepath.Join(t.TempDir(), "does-not-exist.ipa")}
+	if err := cmd.Run(&Globals{}); err == nil {
+		t.Fatal("expected Run to return an error when the push fails, got nil")
 	}
 }

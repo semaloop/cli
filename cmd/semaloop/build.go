@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/semaloop/cli/internal/client"
 	icmd "github.com/semaloop/cli/internal/cmd"
@@ -29,12 +30,10 @@ type BuildPushCmd struct {
 func (c *BuildPushCmd) Run(g *Globals) error {
 	apiKey, err := config.APIKey()
 	if err != nil {
-		log.Error("Could not load configuration.", "err", err)
-		return nil
+		return fmt.Errorf("could not load configuration: %w", err)
 	}
 	if apiKey == "" {
-		log.Error("Not authenticated. Run `semaloop auth login` first.")
-		return nil
+		return fmt.Errorf("not authenticated, run `semaloop auth login` first")
 	}
 
 	result, err := icmd.Push(context.Background(), apiKey, client.ServerURL(), c.File, icmd.PushOptions{
@@ -47,19 +46,18 @@ func (c *BuildPushCmd) Run(g *Globals) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, client.ErrUnauthorized):
-			log.Error("Invalid API key. Run `semaloop auth login` to update it.")
+			return fmt.Errorf("invalid API key, run `semaloop auth login` to update it")
 		case errors.Is(err, client.ErrForbidden):
-			log.Error("Your account does not have permission to upload builds.")
+			return fmt.Errorf("your account does not have permission to upload builds")
 		default:
-			log.Error("Build push failed.", "err", err)
+			return fmt.Errorf("build push failed: %w", err)
 		}
-		return nil
 	}
 
 	if g.DryRun {
 		log.Info("Dry run complete. No upload performed.")
 	} else {
-		log.Info("Build uploaded successfully.", "id", result.UploadID)
+		log.Info("Build uploaded successfully.", "event", "build_push_succeeded", "id", result.UploadID)
 	}
 	return nil
 }

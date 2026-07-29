@@ -74,3 +74,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Move major version tag
+        if: steps.semantic-release.outputs.new_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          tag=$(git describe --tags --exact-match HEAD)
+          major="${tag%%.*}"
+          git tag -f "$major" "$tag"
+          git push origin "$major" --force
