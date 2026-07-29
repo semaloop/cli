@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/semaloop/cli/compare/v1.6.0...v1.7.0) (2026-07-29)
+
+
+### Features
+
+* Add "build push" GitHub action ([#14](https://github.com/semaloop/cli/issues/14)) ([4f31ee7](https://github.com/semaloop/cli/commit/4f31ee70679991721e651456a102ab4a91b2d0f5))
+
 # [1.6.0](https://github.com/semaloop/cli/compare/v1.5.0...v1.6.0) (2026-07-02)
 
 
