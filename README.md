@@ -48,11 +48,11 @@ You can specify `--git-repo`, `--git-commit` and `--git-ref`, which allows Semal
 
 Some of the `semaloop cli` commands come with a pre-packaged GitHub Action that you can drop in to your GitHub workflows.
 
-## `semaloop/cli/actions/build-push`
+### `semaloop/cli/actions/build-push`
 
 Allows a build to be pushed to Semaloop. Arguments like `--git-repo` are deduced automatically. See [`actions/build-push`](./actions/build-push/action.yml) for the full list of inputs and outputs.
 
-### Example
+#### Example
 
 ```yaml
 - uses: semaloop/cli/actions/build-push@v1
