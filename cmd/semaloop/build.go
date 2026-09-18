@@ -24,7 +24,7 @@ type BuildPushCmd struct {
 	GitRepo               string `help:"Source repository (owner/name) the build was produced from." name:"git-repo" and:"gitref"`
 	GitCommit             string `help:"Commit SHA the build was produced from." name:"git-commit" and:"gitref"`
 	GitRef                string `help:"Git ref (e.g. refs/heads/main) the build was produced from." name:"git-ref" and:"gitref"`
-	AllowDuplicateVersion bool   `help:"Accept an upload whose bundle, version label, and version name already exist, recording it as a distinct build instead of rejecting it." name:"allow-duplicate-version"`
+	AllowDuplicateVersion bool   `help:"Accept an upload whose version label and version name already exist for this app, recording it as a distinct build instead of rejecting it." name:"allow-duplicate-version"`
 }
 
 func (c *BuildPushCmd) Run(g *Globals) error {

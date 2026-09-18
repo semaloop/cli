@@ -31,8 +31,8 @@ inputs:
     default: ${{ github.head_ref && format('refs/heads/{0}', github.head_ref) || github.ref }}
   allow-duplicate-version:
     description: >
-      Accept an upload whose bundle, version label, and version name already
-      exist, recording it as a distinct build instead of rejecting it.
+      Accept an upload whose version label and version name already exist for
+      this app, recording it as a distinct build instead of rejecting it.
     required: false
     default: 'false'
   dry-run:
