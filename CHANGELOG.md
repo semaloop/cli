@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/semaloop/cli/compare/v1.7.0...v1.8.0) (2026-09-21)
+
+
+### Features
+
+* Initial support for Android .apk build artifacts ([#17](https://github.com/semaloop/cli/issues/17)) ([5d3731e](https://github.com/semaloop/cli/commit/5d3731e0b838c118a9c4dc30af08617477675528))
+
 # [1.7.0](https://github.com/semaloop/cli/compare/v1.6.0...v1.7.0) (2026-07-29)
 
 
