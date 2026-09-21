@@ -184,7 +184,7 @@ func makeAppBundle(t *testing.T) string {
 func makeIPAFile(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "App.ipa")
-	writeIPA(t, path, func(zw *zip.Writer) {
+	writeZip(t, path, func(zw *zip.Writer) {
 		if _, err := zw.Create("Payload/Demo.app/"); err != nil {
 			t.Fatal(err)
 		}
@@ -199,8 +199,25 @@ func makeIPAFile(t *testing.T) string {
 	return path
 }
 
-// writeIPA writes a zip archive at path, calling fn to populate its entries.
-func writeIPA(t *testing.T, path string, fn func(*zip.Writer)) {
+// makeAPKFile creates a minimal valid .apk (a zip archive with a root-level
+// AndroidManifest.xml entry) at a path inside t.TempDir.
+func makeAPKFile(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "App.apk")
+	writeZip(t, path, func(zw *zip.Writer) {
+		w, err := zw.Create("AndroidManifest.xml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte("binary xml")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	return path
+}
+
+// writeZip writes a zip archive at path, calling fn to populate its entries.
+func writeZip(t *testing.T, path string, fn func(*zip.Writer)) {
 	t.Helper()
 	f, err := os.Create(path)
 	if err != nil {
@@ -283,7 +300,7 @@ func TestValidateArtifactIPANotZip(t *testing.T) {
 
 func TestValidateArtifactIPAMissingPayload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "App.ipa")
-	writeIPA(t, path, func(zw *zip.Writer) {
+	writeZip(t, path, func(zw *zip.Writer) {
 		w, err := zw.Create("README.txt")
 		if err != nil {
 			t.Fatal(err)
@@ -302,6 +319,126 @@ func TestValidateArtifactIPAMissingPayload(t *testing.T) {
 	}
 }
 
+func TestValidateArtifactValidAPK(t *testing.T) {
+	path := makeAPKFile(t)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateArtifact(path, info); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+}
+
+func TestValidateArtifactAPKAsDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.apk")
+	if err := os.Mkdir(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "expected a file") {
+		t.Errorf("expected 'expected a file' error, got %v", err)
+	}
+}
+
+func TestValidateArtifactAPKNotZip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.apk")
+	if err := os.WriteFile(path, []byte("not a zip"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "not a zip archive") {
+		t.Errorf("expected 'not a zip archive' error, got %v", err)
+	}
+}
+
+func TestValidateArtifactAPKMissingManifest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.apk")
+	writeZip(t, path, func(zw *zip.Writer) {
+		w, err := zw.Create("classes.dex")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte("dex")); err != nil {
+			t.Fatal(err)
+		}
+	})
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "AndroidManifest.xml not found") {
+		t.Errorf("expected 'AndroidManifest.xml not found' error, got %v", err)
+	}
+}
+
+// TestValidateArtifactAPKSet covers XAPK / APK-set containers, which are a zip
+// of APKs rather than an APK. The API rejects these at finalize; catching them
+// locally saves the upload.
+func TestValidateArtifactAPKSet(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "App.apk")
+	writeZip(t, path, func(zw *zip.Writer) {
+		for _, name := range []string{"base.apk", "split_config.arm64_v8a.apk"} {
+			w, err := zw.Create(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := w.Write([]byte("apk")); err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateArtifact(path, info)
+	if err == nil || !strings.Contains(err.Error(), "XAPK or APK set") {
+		t.Errorf("expected 'XAPK or APK set' error, got %v", err)
+	}
+}
+
+// TestValidateArtifactUppercaseExtensions covers artifacts whose extension is
+// not lowercase, which Android build pipelines produce more often than Xcode.
+func TestValidateArtifactUppercaseExtensions(t *testing.T) {
+	apk := makeAPKFile(t)
+	upperAPK := filepath.Join(filepath.Dir(apk), "App.APK")
+	if err := os.Rename(apk, upperAPK); err != nil {
+		t.Fatal(err)
+	}
+
+	ipa := makeIPAFile(t)
+	upperIPA := filepath.Join(filepath.Dir(ipa), "App.IPA")
+	if err := os.Rename(ipa, upperIPA); err != nil {
+		t.Fatal(err)
+	}
+
+	app := makeAppBundle(t)
+	upperApp := filepath.Join(filepath.Dir(app), "App.App")
+	if err := os.Rename(app, upperApp); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{upperAPK, upperIPA, upperApp} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validateArtifact(path, info); err != nil {
+			t.Errorf("%s: expected nil, got %v", filepath.Base(path), err)
+		}
+	}
+}
+
 func TestValidateArtifactUnsupportedExtension(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "App.zip")
 	if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
@@ -312,8 +449,8 @@ func TestValidateArtifactUnsupportedExtension(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = validateArtifact(path, info)
-	if err == nil || !strings.Contains(err.Error(), "expected .app or .ipa") {
-		t.Errorf("expected 'expected .app or .ipa' error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "expected .app, .ipa or .apk") {
+		t.Errorf("expected 'expected .app, .ipa or .apk' error, got %v", err)
 	}
 }
 
@@ -376,6 +513,52 @@ func TestPushReturnsUploadID_IPA(t *testing.T) {
 	}
 	if !bytes.Equal(uploaded.Bytes(), expected) {
 		t.Errorf("expected uploaded body to equal raw .ipa bytes (%d bytes), got %d bytes", len(expected), uploaded.Len())
+	}
+}
+
+// TestPushReturnsUploadID_APK verifies an .apk is streamed to the pre-signed URL
+// byte-for-byte. The API rejects an APK wrapped in another zip, so Push must not
+// repackage it.
+func TestPushReturnsUploadID_APK(t *testing.T) {
+	const uploadID = "apk-123"
+
+	var uploaded bytes.Buffer
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/uploads":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, createOKBody(uploadID, srv.URL+"/upload"))
+		case r.Method == http.MethodPut && r.URL.Path == "/upload":
+			io.Copy(&uploaded, r.Body)
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/uploads/finalize":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, finalizeOKBody())
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer srv.Close()
+
+	apkPath := makeAPKFile(t)
+	expected, err := os.ReadFile(apkPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Push(context.Background(), "key", srv.URL, apkPath, PushOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.UploadID != uploadID {
+		t.Errorf("expected UploadID %q, got %q", uploadID, result.UploadID)
+	}
+	if !bytes.Equal(uploaded.Bytes(), expected) {
+		t.Errorf("expected uploaded body to equal raw .apk bytes (%d bytes), got %d bytes", len(expected), uploaded.Len())
 	}
 }
 

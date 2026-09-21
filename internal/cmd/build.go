@@ -33,14 +33,15 @@ type PushOptions struct {
 	Commit string
 	Ref    string
 
-	// AllowDuplicateVersion accepts an upload whose (bundle, version label,
-	// version name) already exists, recording it as a distinct build instead
-	// of rejecting it. Defaults to false.
+	// AllowDuplicateVersion accepts an upload whose version label and version
+	// name already exist for this app, recording it as a distinct build
+	// instead of rejecting it. Defaults to false.
 	AllowDuplicateVersion bool
 }
 
 // Push creates a build upload and streams the file to the returned URL.
-// If filePath is a directory it is zipped into a temporary file first.
+// If filePath is a directory it is zipped into a temporary file first; .ipa
+// and .apk files are sent as-is, since the API expects the raw archive.
 func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOptions) (PushResult, error) {
 	filePath = filepath.Clean(filePath)
 	info, err := os.Stat(filePath)
@@ -191,9 +192,12 @@ func UploadFile(path, uploadURL string) (int, error) {
 	return resp.StatusCode, nil
 }
 
-// validateArtifact checks that path is a .app bundle or .ipa file.
+// validateArtifact checks that path is a .app bundle, .ipa file or .apk file.
 func validateArtifact(path string, info os.FileInfo) error {
-	ext := filepath.Ext(path)
+	// Case-folded: Android CI produces more varied filename casing than Xcode,
+	// so an `app-release.APK` should be recognised rather than reported as an
+	// unsupported artifact.
+	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".app":
 		if !info.IsDir() {
@@ -209,8 +213,15 @@ func validateArtifact(path string, info os.FileInfo) error {
 		if err := validateIPA(path); err != nil {
 			return err
 		}
+	case ".apk":
+		if info.IsDir() {
+			return fmt.Errorf("%q is not a valid .apk file (expected a file, not a directory)", path)
+		}
+		if err := validateAPK(path); err != nil {
+			return err
+		}
 	default:
-		return fmt.Errorf("%q is not a supported iOS artifact (expected .app or .ipa)", path)
+		return fmt.Errorf("%q is not a supported build artifact (expected .app, .ipa or .apk)", path)
 	}
 	return nil
 }
@@ -230,6 +241,32 @@ func validateIPA(path string) error {
 		}
 	}
 	return fmt.Errorf("%q does not appear to be a valid .ipa file (Payload/ not found)", path)
+}
+
+// validateAPK verifies that path is a zip archive with AndroidManifest.xml at
+// its root, which is the structural marker the API uses to recognise a
+// standalone APK. Archives that bundle APKs inside them (XAPK, APK sets) are
+// rejected here with the same guidance the API gives, to save a round trip.
+func validateAPK(path string) error {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return fmt.Errorf("%q does not appear to be a valid .apk file (not a zip archive): %w", path, err)
+	}
+	defer zr.Close()
+
+	containsAPK := false
+	for _, f := range zr.File {
+		if f.Name == "AndroidManifest.xml" {
+			return nil
+		}
+		if strings.HasSuffix(strings.ToLower(f.Name), ".apk") {
+			containsAPK = true
+		}
+	}
+	if containsAPK {
+		return fmt.Errorf("%q looks like an XAPK or APK set, which is not supported (upload a standalone .apk file)", path)
+	}
+	return fmt.Errorf("%q does not appear to be a valid .apk file (AndroidManifest.xml not found)", path)
 }
 
 // zipDir creates a temporary zip archive of the directory at src and returns its path.

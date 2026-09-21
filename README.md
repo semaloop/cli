@@ -42,6 +42,8 @@ Allows you to authenticate with Semaloop using an API key, and remove any existi
 
 Allows you to push an iOS build artifact (`.app` or `.ipa`) for testing.
 
+Android `.apk` uploads are in a limited beta; talk to us before using them.
+
 You can specify `--git-repo`, `--git-commit` and `--git-ref`, which allows Semaloop to report the results back as a status check on the commit or pull request. You must have connected your repository to Semaloop via our web dashboard for this to work. All three arguments must be specified.
 
 ## GitHub Actions
