@@ -56,6 +56,8 @@ func (s *ErrorResponse) SetSuccess(val bool) {
 	s.Success = val
 }
 
+func (*ErrorResponse) postCreateUploadRes() {}
+
 type ErrorResponseErrorsItem struct {
 	Code    float64 `json:"code"`
 	Message string  `json:"message"`
@@ -198,6 +200,7 @@ func (s *FinalizeUploadGitRef) SetRepo(val string) {
 // Ref: #/components/schemas/FinalizeUploadSuccessResponse
 type FinalizeUploadSuccessResponse struct {
 	AppId        string                               `json:"appId"`
+	BuildId      string                               `json:"buildId"`
 	BundleId     string                               `json:"bundleId"`
 	Success      FinalizeUploadSuccessResponseSuccess `json:"success"`
 	VersionLabel string                               `json:"versionLabel"`
@@ -207,6 +210,11 @@ type FinalizeUploadSuccessResponse struct {
 // GetAppId returns the value of AppId.
 func (s *FinalizeUploadSuccessResponse) GetAppId() string {
 	return s.AppId
+}
+
+// GetBuildId returns the value of BuildId.
+func (s *FinalizeUploadSuccessResponse) GetBuildId() string {
+	return s.BuildId
 }
 
 // GetBundleId returns the value of BundleId.
@@ -232,6 +240,11 @@ func (s *FinalizeUploadSuccessResponse) GetVersionName() string {
 // SetAppId sets the value of AppId.
 func (s *FinalizeUploadSuccessResponse) SetAppId(val string) {
 	s.AppId = val
+}
+
+// SetBuildId sets the value of BuildId.
+func (s *FinalizeUploadSuccessResponse) SetBuildId(val string) {
+	s.BuildId = val
 }
 
 // SetBundleId sets the value of BundleId.
@@ -453,10 +466,6 @@ func (o OptString) Or(d string) string {
 	return d
 }
 
-type PostCreateUploadForbidden ErrorResponse
-
-func (*PostCreateUploadForbidden) postCreateUploadRes() {}
-
 type PostCreateUploadOK struct {
 	Result  CreateUploadResponse `json:"result"`
 	Success bool                 `json:"success"`
@@ -484,25 +493,17 @@ func (s *PostCreateUploadOK) SetSuccess(val bool) {
 
 func (*PostCreateUploadOK) postCreateUploadRes() {}
 
-type PostCreateUploadUnauthorized ErrorResponse
-
-func (*PostCreateUploadUnauthorized) postCreateUploadRes() {}
-
 type PostFinalizeUploadBadRequest ErrorResponse
 
 func (*PostFinalizeUploadBadRequest) postFinalizeUploadRes() {}
-
-type PostFinalizeUploadForbidden ErrorResponse
-
-func (*PostFinalizeUploadForbidden) postFinalizeUploadRes() {}
 
 type PostFinalizeUploadNotFound ErrorResponse
 
 func (*PostFinalizeUploadNotFound) postFinalizeUploadRes() {}
 
 type PostFinalizeUploadReq struct {
-	// When true, accept an upload whose (bundle, version label, version name) already exists, recording
-	// it as a distinct build instead of rejecting it. Defaults to false.
+	// When true, accept an upload whose version label and version name already exist for this app,
+	// recording it as a distinct build instead of rejecting it. Defaults to false.
 	AllowDuplicateVersion OptBool                 `json:"allowDuplicateVersion"`
 	GitRef                OptFinalizeUploadGitRef `json:"gitRef"`
 	// Upload ID returned by POST /api/v1/uploads.

@@ -698,6 +698,10 @@ func (s *FinalizeUploadSuccessResponse) encodeFields(e *jx.Encoder) {
 		e.Str(s.AppId)
 	}
 	{
+		e.FieldStart("buildId")
+		e.Str(s.BuildId)
+	}
+	{
 		e.FieldStart("bundleId")
 		e.Str(s.BundleId)
 	}
@@ -715,12 +719,13 @@ func (s *FinalizeUploadSuccessResponse) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfFinalizeUploadSuccessResponse = [5]string{
+var jsonFieldsNameOfFinalizeUploadSuccessResponse = [6]string{
 	0: "appId",
-	1: "bundleId",
-	2: "success",
-	3: "versionLabel",
-	4: "versionName",
+	1: "buildId",
+	2: "bundleId",
+	3: "success",
+	4: "versionLabel",
+	5: "versionName",
 }
 
 // Decode decodes FinalizeUploadSuccessResponse from json.
@@ -744,8 +749,20 @@ func (s *FinalizeUploadSuccessResponse) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"appId\"")
 			}
-		case "bundleId":
+		case "buildId":
 			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.BuildId = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"buildId\"")
+			}
+		case "bundleId":
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				v, err := d.Str()
 				s.BundleId = string(v)
@@ -757,7 +774,7 @@ func (s *FinalizeUploadSuccessResponse) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"bundleId\"")
 			}
 		case "success":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
 				if err := s.Success.Decode(d); err != nil {
 					return err
@@ -767,7 +784,7 @@ func (s *FinalizeUploadSuccessResponse) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"success\"")
 			}
 		case "versionLabel":
-			requiredBitSet[0] |= 1 << 3
+			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
 				v, err := d.Str()
 				s.VersionLabel = string(v)
@@ -779,7 +796,7 @@ func (s *FinalizeUploadSuccessResponse) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"versionLabel\"")
 			}
 		case "versionName":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				v, err := d.Str()
 				s.VersionName = string(v)
@@ -800,7 +817,7 @@ func (s *FinalizeUploadSuccessResponse) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00011111,
+		0b00111111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -1014,44 +1031,6 @@ func (s *OptString) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes PostCreateUploadForbidden as json.
-func (s *PostCreateUploadForbidden) Encode(e *jx.Encoder) {
-	unwrapped := (*ErrorResponse)(s)
-
-	unwrapped.Encode(e)
-}
-
-// Decode decodes PostCreateUploadForbidden from json.
-func (s *PostCreateUploadForbidden) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode PostCreateUploadForbidden to nil")
-	}
-	var unwrapped ErrorResponse
-	if err := func() error {
-		if err := unwrapped.Decode(d); err != nil {
-			return err
-		}
-		return nil
-	}(); err != nil {
-		return errors.Wrap(err, "alias")
-	}
-	*s = PostCreateUploadForbidden(unwrapped)
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s *PostCreateUploadForbidden) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *PostCreateUploadForbidden) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
 // Encode implements json.Marshaler.
 func (s *PostCreateUploadOK) Encode(e *jx.Encoder) {
 	e.ObjStart()
@@ -1163,44 +1142,6 @@ func (s *PostCreateUploadOK) UnmarshalJSON(data []byte) error {
 	return s.Decode(d)
 }
 
-// Encode encodes PostCreateUploadUnauthorized as json.
-func (s *PostCreateUploadUnauthorized) Encode(e *jx.Encoder) {
-	unwrapped := (*ErrorResponse)(s)
-
-	unwrapped.Encode(e)
-}
-
-// Decode decodes PostCreateUploadUnauthorized from json.
-func (s *PostCreateUploadUnauthorized) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode PostCreateUploadUnauthorized to nil")
-	}
-	var unwrapped ErrorResponse
-	if err := func() error {
-		if err := unwrapped.Decode(d); err != nil {
-			return err
-		}
-		return nil
-	}(); err != nil {
-		return errors.Wrap(err, "alias")
-	}
-	*s = PostCreateUploadUnauthorized(unwrapped)
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s *PostCreateUploadUnauthorized) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *PostCreateUploadUnauthorized) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
 // Encode encodes PostFinalizeUploadBadRequest as json.
 func (s *PostFinalizeUploadBadRequest) Encode(e *jx.Encoder) {
 	unwrapped := (*ErrorResponse)(s)
@@ -1235,44 +1176,6 @@ func (s *PostFinalizeUploadBadRequest) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *PostFinalizeUploadBadRequest) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
-// Encode encodes PostFinalizeUploadForbidden as json.
-func (s *PostFinalizeUploadForbidden) Encode(e *jx.Encoder) {
-	unwrapped := (*ErrorResponse)(s)
-
-	unwrapped.Encode(e)
-}
-
-// Decode decodes PostFinalizeUploadForbidden from json.
-func (s *PostFinalizeUploadForbidden) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode PostFinalizeUploadForbidden to nil")
-	}
-	var unwrapped ErrorResponse
-	if err := func() error {
-		if err := unwrapped.Decode(d); err != nil {
-			return err
-		}
-		return nil
-	}(); err != nil {
-		return errors.Wrap(err, "alias")
-	}
-	*s = PostFinalizeUploadForbidden(unwrapped)
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s *PostFinalizeUploadForbidden) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *PostFinalizeUploadForbidden) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
