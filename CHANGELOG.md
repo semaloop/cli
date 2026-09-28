@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/semaloop/cli/compare/v1.8.0...v1.9.0) (2026-09-28)
+
+
+### Features
+
+* expose build ID from build push ([#18](https://github.com/semaloop/cli/issues/18)) ([7ed3c40](https://github.com/semaloop/cli/commit/7ed3c403ef77458385ac1a1a5dd89ce8697f934a))
+
 # [1.8.0](https://github.com/semaloop/cli/compare/v1.7.0...v1.8.0) (2026-09-21)
 
 
