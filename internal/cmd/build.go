@@ -3,6 +3,7 @@ package cmd
 import (
 	"archive/zip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"github.com/ogen-go/ogen/validate"
 	"github.com/semaloop/cli/internal/api"
 	"github.com/semaloop/cli/internal/client"
 )
@@ -18,6 +20,7 @@ import (
 // PushResult holds the outcome of a successful Push.
 type PushResult struct {
 	UploadID string
+	BuildID  string
 }
 
 // PushOptions configures optional behavior for Push.
@@ -83,19 +86,18 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOpti
 
 	res, err := c.PostCreateUpload(ctx)
 	if err != nil {
+		if statusCode(err) == http.StatusForbidden {
+			return PushResult{}, client.ErrForbidden
+		}
 		return PushResult{}, fmt.Errorf("could not connect to Semaloop: %w", err)
 	}
 
 	createRes, ok := res.(*api.PostCreateUploadOK)
 	if !ok {
-		switch res.(type) {
-		case *api.PostCreateUploadUnauthorized:
+		if _, unauthorized := res.(*api.ErrorResponse); unauthorized {
 			return PushResult{}, client.ErrUnauthorized
-		case *api.PostCreateUploadForbidden:
-			return PushResult{}, client.ErrForbidden
-		default:
-			return PushResult{}, fmt.Errorf("unexpected response from server (%T)", res)
 		}
+		return PushResult{}, fmt.Errorf("unexpected response from server (%T)", res)
 	}
 
 	status, err := UploadFile(uploadPath, createRes.Result.UploadUrl)
@@ -122,12 +124,18 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOpti
 
 	finalizeRes, err := c.PostFinalizeUpload(ctx, api.NewOptPostFinalizeUploadReq(finalizeReq))
 	if err != nil {
+		if statusCode(err) == http.StatusForbidden {
+			return PushResult{}, client.ErrForbidden
+		}
 		return PushResult{}, fmt.Errorf("could not finalize upload: %w", err)
 	}
 
 	switch r := finalizeRes.(type) {
 	case *api.FinalizeUploadSuccessResponse:
-		return PushResult{UploadID: createRes.Result.UploadId}, nil
+		return PushResult{
+			UploadID: createRes.Result.UploadId,
+			BuildID:  r.BuildId,
+		}, nil
 	case *api.FinalizeUploadFailureResponse:
 		logger := log.With()
 
@@ -153,13 +161,19 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOpti
 		return PushResult{}, fmt.Errorf("finalize rejected: %s", msg)
 	case *api.PostFinalizeUploadUnauthorized:
 		return PushResult{}, client.ErrUnauthorized
-	case *api.PostFinalizeUploadForbidden:
-		return PushResult{}, client.ErrForbidden
 	case *api.PostFinalizeUploadNotFound:
 		return PushResult{}, fmt.Errorf("upload not found")
 	default:
 		return PushResult{}, fmt.Errorf("unexpected response from server (%T)", finalizeRes)
 	}
+}
+
+func statusCode(err error) int {
+	var statusErr *validate.UnexpectedStatusCodeError
+	if errors.As(err, &statusErr) {
+		return statusErr.StatusCode
+	}
+	return 0
 }
 
 // UploadFile streams the file at path to the given pre-signed URL via PUT.

@@ -44,6 +44,9 @@ outputs:
   upload-id:
     description: 'The id of the created upload. Empty on a dry run.'
     value: ${{ steps.push.outputs.upload-id }}
+  build-id:
+    description: 'The id of the finalized build. Empty on a dry run.'
+    value: ${{ steps.push.outputs.build-id }}
 
 runs:
   using: composite
@@ -161,4 +164,9 @@ runs:
         upload_id=$(jq -R -r 'fromjson? | select(.event == "build_push_succeeded") | .id // empty' "$log_file" | tail -n1)
         if [ -n "$upload_id" ]; then
           echo "upload-id=$upload_id" >> "$GITHUB_OUTPUT"
+        fi
+
+        build_id=$(jq -R -r 'fromjson? | select(.event == "build_push_succeeded") | .build_id // empty' "$log_file" | tail -n1)
+        if [ -n "$build_id" ]; then
+          echo "build-id=$build_id" >> "$GITHUB_OUTPUT"
         fi

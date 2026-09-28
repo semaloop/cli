@@ -151,6 +151,7 @@ func finalizeOKBody() string {
 	b, _ := json.Marshal(map[string]any{
 		"success":      true,
 		"appId":        "app-1",
+		"buildId":      "build-1",
 		"bundleId":     "com.example.app",
 		"versionLabel": "1.0",
 		"versionName":  "1.0.0",
@@ -470,6 +471,9 @@ func TestPushReturnsUploadID(t *testing.T) {
 	}
 	if result.UploadID != uploadID {
 		t.Errorf("expected UploadID %q, got %q", uploadID, result.UploadID)
+	}
+	if result.BuildID != "build-1" {
+		t.Errorf("expected BuildID %q, got %q", "build-1", result.BuildID)
 	}
 }
 
