@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: 'Semaloop: push build'
-description: 'Upload an iOS build artifact to Semaloop for continuous testing'
+description: 'Upload an iOS or Android build artifact to Semaloop for continuous testing'
 author: 'Semaloop'
 
 inputs:
   path:
-    description: 'Path to the build artifact to upload (.app or .ipa).'
+    description: 'Path to the build artifact to upload (.app or .ipa for iOS, or a standalone .apk for Android).'
     required: true
   api-key:
     description: 'Semaloop API key. Store this as a repository or organization secret.'

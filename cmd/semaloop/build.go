@@ -20,7 +20,7 @@ type BuildCmd struct {
 // group makes Kong reject a partial set (e.g. --git-repo without --git-commit)
 // at parse time.
 type BuildPushCmd struct {
-	File                  string `arg:"" help:"Path to the build artifact to upload (.app or .ipa)." type:"path"`
+	File                  string `arg:"" help:"Path to the build artifact to upload (.app or .ipa for iOS, or a standalone .apk for Android)." type:"path"`
 	GitRepo               string `help:"Source repository (owner/name) the build was produced from." name:"git-repo" and:"gitref"`
 	GitCommit             string `help:"Commit SHA the build was produced from." name:"git-commit" and:"gitref"`
 	GitRef                string `help:"Git ref (e.g. refs/heads/main) the build was produced from." name:"git-ref" and:"gitref"`
