@@ -40,9 +40,9 @@ Allows you to authenticate with Semaloop using an API key, and remove any existi
 
 ### `semaloop build push`
 
-Allows you to push an iOS build artifact (`.app` or `.ipa`) for testing.
+Allows you to push a build artifact for testing: an `.app` or `.ipa` for iOS, or a standalone `.apk` for Android.
 
-Android `.apk` uploads are in a limited beta; talk to us before using them.
+App bundles (`.aab`), XAPK or APK-set containers, and split APKs aren't accepted.
 
 You can specify `--git-repo`, `--git-commit` and `--git-ref`, which allows Semaloop to report the results back as a status check on the commit or pull request. You must have connected your repository to Semaloop via our web dashboard for this to work. All three arguments must be specified.
 
@@ -54,12 +54,21 @@ Some of the `semaloop cli` commands come with a pre-packaged GitHub Action that 
 
 Allows a build to be pushed to Semaloop. Arguments like `--git-repo` are deduced automatically. See [`actions/build-push`](./actions/build-push/action.yml) for the full list of inputs and outputs.
 
-#### Example
+#### iOS example
 
 ```yaml
 - uses: semaloop/cli/actions/build-push@v1
   with:
     path: build/YourApp.app
+    api-key: ${{ secrets.SEMALOOP_API_KEY }}
+```
+
+#### Android example
+
+```yaml
+- uses: semaloop/cli/actions/build-push@v1
+  with:
+    path: app/build/outputs/apk/release/app-release.apk
     api-key: ${{ secrets.SEMALOOP_API_KEY }}
 ```
 
