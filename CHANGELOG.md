@@ -1,3 +1,10 @@
+## [1.9.1](https://github.com/semaloop/cli/compare/v1.9.0...v1.9.1) (2026-10-15)
+
+
+### Bug Fixes
+
+* **deps:** bump golang.org/x/net to v0.55.0 ([#20](https://github.com/semaloop/cli/issues/20)) ([3766141](https://github.com/semaloop/cli/commit/3766141bf4f5bd37aeba8236be175f0c4d5b608d))
+
 # [1.9.0](https://github.com/semaloop/cli/compare/v1.8.0...v1.9.0) (2026-09-28)
 
 
