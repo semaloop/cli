@@ -11,7 +11,7 @@ import (
 )
 
 type BuildCmd struct {
-	Push BuildPushCmd `cmd:"" help:"Upload a build artifact."`
+	Push BuildPushCmd `cmd:"" help:"Upload a build artifact (.app or .ipa for iOS, or a standalone .apk for Android)."`
 }
 
 // BuildPushCmd uploads a build artifact to Semaloop.
