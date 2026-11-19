@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -58,6 +60,18 @@ func TestCompletionPrintsScript(t *testing.T) {
 				t.Errorf("want script without absolute paths, got:\n%s", out)
 			}
 		})
+	}
+}
+
+// TestCompletionShellsMatchScripts keeps the enum tag, which Kong uses to
+// validate and complete the shell argument, in step with completionScripts.
+func TestCompletionShellsMatchScripts(t *testing.T) {
+	field, _ := reflect.TypeFor[CompletionCmd]().FieldByName("Shell")
+	enum := strings.Split(field.Tag.Get("enum"), ",")
+	slices.Sort(enum)
+	scripts := slices.Sorted(maps.Keys(completionScripts))
+	if !slices.Equal(enum, scripts) {
+		t.Errorf("enum tag lists %v, but completionScripts has %v", enum, scripts)
 	}
 }
 
