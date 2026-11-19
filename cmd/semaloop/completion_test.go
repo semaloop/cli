@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -33,7 +35,7 @@ func TestCompletionPrintsScript(t *testing.T) {
 		shell string
 		want  string
 	}{
-		{"bash", "complete -o default -o bashdefault -C semaloop semaloop"},
+		{"bash", "complete -C semaloop semaloop"},
 		{"zsh", "#compdef semaloop"},
 		{"fish", `complete -c semaloop -f -a "(__complete_semaloop)"`},
 	}
@@ -52,8 +54,8 @@ func TestCompletionPrintsScript(t *testing.T) {
 			if !strings.Contains(out, tt.want) {
 				t.Errorf("want output to contain %q, got:\n%s", tt.want, out)
 			}
-			if strings.Contains(out, "{{") || strings.Contains(out, "/semaloop") {
-				t.Errorf("want script without placeholders or absolute paths, got:\n%s", out)
+			if strings.Contains(out, "/semaloop") {
+				t.Errorf("want script without absolute paths, got:\n%s", out)
 			}
 		})
 	}
@@ -71,6 +73,14 @@ func TestCompletionRejectsUnknownShell(t *testing.T) {
 // TestCompletionRegisterAnswersTab simulates the shell invoking `semaloop`
 // on Tab, and checks the candidates come from the Kong model.
 func TestCompletionRegisterAnswersTab(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"MyApp.ipa", "MyApp.apk"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
+
 	tests := []struct {
 		line string
 		want []string
@@ -79,6 +89,9 @@ func TestCompletionRegisterAnswersTab(t *testing.T) {
 		{"semaloop auth lo", []string{"login", "logout"}},
 		{"semaloop completion ", []string{"bash", "fish", "zsh"}},
 		{"semaloop build push --git-r", []string{"--git-ref", "--git-repo"}},
+		// Paths complete only where a path is expected.
+		{"semaloop build push My", []string{"MyApp.apk", "MyApp.ipa"}},
+		{"semaloop completion zsh ", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.line, func(t *testing.T) {
@@ -86,7 +99,10 @@ func TestCompletionRegisterAnswersTab(t *testing.T) {
 			var stdout bytes.Buffer
 			parser := newTestParser(t, &stdout)
 			exited := false
-			kongcompletion.Register(parser, kongcompletion.WithExitFunc(func(int) { exited = true }))
+			kongcompletion.Register(parser,
+				kongcompletion.WithPredictors(completionPredictors),
+				kongcompletion.WithExitFunc(func(int) { exited = true }),
+			)
 			if !exited {
 				t.Fatal("expected Register to handle the completion request and exit")
 			}

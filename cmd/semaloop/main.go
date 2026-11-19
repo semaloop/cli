@@ -43,14 +43,11 @@ func main() {
 
 	// Answer shell completion requests (Tab presses) and exit before anything
 	// else runs, so nothing but the completions reaches the terminal.
-	kongcompletion.Register(parser)
+	kongcompletion.Register(parser, kongcompletion.WithPredictors(completionPredictors))
 
 	ctx, err := parser.Parse(os.Args[1:])
 	parser.FatalIfErrorf(err)
 
-	if ctx.Command() != "completion <shell>" {
-		log.Info("Running Semaloop CLI", "version", version.Version)
-	}
 	if cli.Debug {
 		log.SetLevel(charmlog.DebugLevel)
 	}
@@ -60,6 +57,11 @@ func main() {
 	}
 	if cli.Quiet {
 		log.SetOutput(io.Discard)
+	}
+	// Skip the banner for `completion`, whose output is sourced by the shell
+	// (and run by Homebrew at install time).
+	if _, ok := ctx.Selected().Target.Addr().Interface().(*CompletionCmd); !ok {
+		log.Info("Running Semaloop CLI", "version", version.Version)
 	}
 
 	if err := ctx.Run(); err != nil {

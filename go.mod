@@ -10,6 +10,7 @@ require (
 	github.com/go-faster/jx v1.2.0
 	github.com/jotaen/kong-completion v0.0.15
 	github.com/ogen-go/ogen v1.20.2
+	github.com/posener/complete v1.2.3
 	golang.org/x/term v0.43.0
 )
 
@@ -33,7 +34,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/posener/complete v1.2.3 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/riywo/loginshell v0.0.0-20200815045211-7d26008be1ab // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect

@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/alecthomas/kong"
+	"github.com/posener/complete"
 )
 
 // CompletionCmd prints a shell completion script.
@@ -16,6 +16,13 @@ import (
 // working after the binary moves, e.g. across `brew upgrade`.
 type CompletionCmd struct {
 	Shell string `arg:"" help:"Shell to print a completion script for (${enum})." enum:"bash,zsh,fish"`
+}
+
+// completionPredictors are referenced from struct tags with
+// `completion-predictor:"<name>"`. Arguments without one get no file
+// suggestions, so tag any argument that takes a path.
+var completionPredictors = map[string]complete.Predictor{
+	"file": complete.PredictFiles("*"),
 }
 
 func (c *CompletionCmd) Help() string {
@@ -32,48 +39,44 @@ To enable them permanently, add that line to ~/.bashrc, ~/.zshrc or
 }
 
 func (c *CompletionCmd) Run(ctx *kong.Context) error {
-	script, ok := completionScripts[c.Shell]
-	if !ok {
-		return fmt.Errorf("unsupported shell %q", c.Shell)
-	}
-	_, err := fmt.Fprint(ctx.Stdout, strings.ReplaceAll(script, "{{bin}}", ctx.Model.Name))
+	// The enum tag means Kong has already rejected any other shell.
+	_, err := fmt.Fprint(ctx.Stdout, completionScripts[c.Shell])
 	return err
 }
 
+// The scripts name the binary literally rather than using os.Args[0], which
+// could contain characters that would need quoting, e.g. `semaloop (1)`.
 var completionScripts = map[string]string{
-	// -o default falls back to filename completion, e.g. for `build push <file>`.
-	"bash": `complete -o default -o bashdefault -C {{bin}} {{bin}}
+	"bash": `complete -C semaloop semaloop
 `,
 
-	// Works both when sourced and when autoloaded from $fpath as _{{bin}}
-	// (which is how Homebrew installs it).
-	"zsh": `#compdef {{bin}}
+	// Works both when sourced and when autoloaded from $fpath as _semaloop
+	// (which is how Homebrew installs it). The line is rebuilt from $words
+	// rather than taken from $BUFFER, which also holds any earlier commands
+	// (e.g. "cd x && semaloop ..."), and is cut at the cursor via $PREFIX.
+	"zsh": `#compdef semaloop
 
-_{{bin}}() {
-  local line="${(j: :)words[1,CURRENT]}"
+_semaloop() {
+  local line="${(j: :)words[1,CURRENT-1]} ${PREFIX}"
   local -a candidates
-  candidates=("${(@f)$(COMP_LINE="$line" COMP_POINT=${#line} {{bin}} 2>/dev/null)}")
+  candidates=("${(@f)$(COMP_LINE="$line" COMP_POINT=${#line} semaloop 2>/dev/null)}")
   candidates=(${candidates:#})
-  if (( ${#candidates} )); then
-    compadd -a candidates
-  else
-    _files
-  fi
+  compadd -a candidates
 }
 
 if [[ "${zsh_eval_context[-1]}" == loadautofunc ]]; then
-  _{{bin}} "$@"
+  _semaloop "$@"
 else
-  compdef _{{bin}} {{bin}}
+  compdef _semaloop semaloop
 fi
 `,
 
-	"fish": `function __complete_{{bin}}
+	"fish": `function __complete_semaloop
     set -lx COMP_LINE (commandline -cp)
     test -z (commandline -ct)
     and set COMP_LINE "$COMP_LINE "
-    {{bin}}
+    semaloop
 end
-complete -c {{bin}} -f -a "(__complete_{{bin}})"
+complete -c semaloop -f -a "(__complete_semaloop)"
 `,
 }
