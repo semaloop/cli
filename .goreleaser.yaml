@@ -51,5 +51,8 @@ brews:
       name: github-actions[bot]
       email: 41898282+github-actions[bot]@users.noreply.github.com
     commit_msg_template: "chore: Bump semaloop to {{ .Tag }}"
+    install: |
+      bin.install "semaloop"
+      generate_completions_from_executable(bin/"semaloop", "completion")
     test: |
       system "#{bin}/semaloop", "--version"

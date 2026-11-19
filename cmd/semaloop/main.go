@@ -7,6 +7,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/charmbracelet/lipgloss"
 	charmlog "github.com/charmbracelet/log"
+	kongcompletion "github.com/jotaen/kong-completion"
 	"github.com/semaloop/cli/internal/version"
 )
 
@@ -32,13 +33,21 @@ type CLI struct {
 	Version kong.VersionFlag `short:"v" help:"Print version."`
 	Auth    AuthCmd          `cmd:"" help:"Manage authentication."`
 	Build   BuildCmd         `cmd:"" help:"Manage builds."`
+
+	Completion CompletionCmd `cmd:"" help:"Print a shell completion script."`
 }
 
 func main() {
-	log.Info("Running Semaloop CLI", "version", version.Version)
-
 	cli := CLI{}
-	ctx := kong.Parse(&cli, kong.Vars{"version": version.Version}, kong.Bind(&cli.Globals))
+	parser := kong.Must(&cli, kong.Vars{"version": version.Version}, kong.Bind(&cli.Globals))
+
+	// Answer shell completion requests (Tab presses) and exit before anything
+	// else runs, so nothing but the completions reaches the terminal.
+	kongcompletion.Register(parser, kongcompletion.WithPredictors(completionPredictors))
+
+	ctx, err := parser.Parse(os.Args[1:])
+	parser.FatalIfErrorf(err)
+
 	if cli.Debug {
 		log.SetLevel(charmlog.DebugLevel)
 	}
@@ -48,6 +57,11 @@ func main() {
 	}
 	if cli.Quiet {
 		log.SetOutput(io.Discard)
+	}
+	// Skip the banner for `completion`, whose output is sourced by the shell
+	// (and run by Homebrew at install time).
+	if _, ok := ctx.Selected().Target.Addr().Interface().(*CompletionCmd); !ok {
+		log.Info("Running Semaloop CLI", "version", version.Version)
 	}
 
 	if err := ctx.Run(); err != nil {

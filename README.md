@@ -16,6 +16,21 @@ brew tap semaloop/tap
 brew install semaloop
 ```
 
+### Shell completion
+
+`semaloop completion <shell>` prints a completion script for `bash`, `zsh` or `fish`. Homebrew installs completions automatically. Otherwise, add the line for your shell to its startup file:
+
+```
+# ~/.bashrc
+source <(semaloop completion bash)
+
+# ~/.zshrc (after compinit)
+source <(semaloop completion zsh)
+
+# ~/.config/fish/config.fish
+semaloop completion fish | source
+```
+
 ## Usage
 
 First, you'll need to authenticate using your Semaloop API key. You can specify this using the `SEMALOOP_API_KEY` environment variable, or you can run:
