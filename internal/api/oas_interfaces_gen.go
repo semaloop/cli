@@ -8,3 +8,7 @@ type PostCreateUploadRes interface {
 type PostFinalizeUploadRes interface {
 	postFinalizeUploadRes()
 }
+
+type PostSyncTestsRes interface {
+	postSyncTestsRes()
+}

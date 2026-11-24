@@ -8,4 +8,5 @@ type OperationName = string
 const (
 	PostCreateUploadOperation   OperationName = "PostCreateUpload"
 	PostFinalizeUploadOperation OperationName = "PostFinalizeUpload"
+	PostSyncTestsOperation      OperationName = "PostSyncTests"
 )

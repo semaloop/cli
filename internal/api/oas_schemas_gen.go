@@ -2,6 +2,10 @@
 
 package api
 
+import (
+	"github.com/go-faster/errors"
+)
+
 // Ref: #/components/schemas/CreateUploadResponse
 type CreateUploadResponse struct {
 	// Server-generated upload identifier.
@@ -374,6 +378,52 @@ func (o OptFinalizeUploadGitRef) Or(d FinalizeUploadGitRef) FinalizeUploadGitRef
 	return d
 }
 
+// NewOptInt returns new OptInt with value set to v.
+func NewOptInt(v int) OptInt {
+	return OptInt{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInt is optional int.
+type OptInt struct {
+	Value int
+	Set   bool
+}
+
+// IsSet returns true if OptInt was set.
+func (o OptInt) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInt) Reset() {
+	var v int
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInt) SetTo(v int) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInt) Get() (v int, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInt) Or(d int) int {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptPostFinalizeUploadReq returns new OptPostFinalizeUploadReq with value set to v.
 func NewOptPostFinalizeUploadReq(v PostFinalizeUploadReq) OptPostFinalizeUploadReq {
 	return OptPostFinalizeUploadReq{
@@ -543,3 +593,370 @@ func (s *PostFinalizeUploadReq) SetID(val string) {
 type PostFinalizeUploadUnauthorized ErrorResponse
 
 func (*PostFinalizeUploadUnauthorized) postFinalizeUploadRes() {}
+
+type PostSyncTestsBadRequest ErrorResponse
+
+func (*PostSyncTestsBadRequest) postSyncTestsRes() {}
+
+type PostSyncTestsConflict ErrorResponse
+
+func (*PostSyncTestsConflict) postSyncTestsRes() {}
+
+type PostSyncTestsOK struct {
+	Result  SyncTestsResult `json:"result"`
+	Success bool            `json:"success"`
+}
+
+// GetResult returns the value of Result.
+func (s *PostSyncTestsOK) GetResult() SyncTestsResult {
+	return s.Result
+}
+
+// GetSuccess returns the value of Success.
+func (s *PostSyncTestsOK) GetSuccess() bool {
+	return s.Success
+}
+
+// SetResult sets the value of Result.
+func (s *PostSyncTestsOK) SetResult(val SyncTestsResult) {
+	s.Result = val
+}
+
+// SetSuccess sets the value of Success.
+func (s *PostSyncTestsOK) SetSuccess(val bool) {
+	s.Success = val
+}
+
+func (*PostSyncTestsOK) postSyncTestsRes() {}
+
+type PostSyncTestsUnauthorized ErrorResponse
+
+func (*PostSyncTestsUnauthorized) postSyncTestsRes() {}
+
+// Ref: #/components/schemas/SyncTestChange
+type SyncTestChange struct {
+	Action SyncTestChangeAction `json:"action"`
+	// Fields that change, for update and take_over.
+	Fields            []string  `json:"fields"`
+	Identifier        string    `json:"identifier"`
+	Name              OptString `json:"name"`
+	TakeOverRedundant OptBool   `json:"takeOverRedundant"`
+	TestId            OptString `json:"testId"`
+}
+
+// GetAction returns the value of Action.
+func (s *SyncTestChange) GetAction() SyncTestChangeAction {
+	return s.Action
+}
+
+// GetFields returns the value of Fields.
+func (s *SyncTestChange) GetFields() []string {
+	return s.Fields
+}
+
+// GetIdentifier returns the value of Identifier.
+func (s *SyncTestChange) GetIdentifier() string {
+	return s.Identifier
+}
+
+// GetName returns the value of Name.
+func (s *SyncTestChange) GetName() OptString {
+	return s.Name
+}
+
+// GetTakeOverRedundant returns the value of TakeOverRedundant.
+func (s *SyncTestChange) GetTakeOverRedundant() OptBool {
+	return s.TakeOverRedundant
+}
+
+// GetTestId returns the value of TestId.
+func (s *SyncTestChange) GetTestId() OptString {
+	return s.TestId
+}
+
+// SetAction sets the value of Action.
+func (s *SyncTestChange) SetAction(val SyncTestChangeAction) {
+	s.Action = val
+}
+
+// SetFields sets the value of Fields.
+func (s *SyncTestChange) SetFields(val []string) {
+	s.Fields = val
+}
+
+// SetIdentifier sets the value of Identifier.
+func (s *SyncTestChange) SetIdentifier(val string) {
+	s.Identifier = val
+}
+
+// SetName sets the value of Name.
+func (s *SyncTestChange) SetName(val OptString) {
+	s.Name = val
+}
+
+// SetTakeOverRedundant sets the value of TakeOverRedundant.
+func (s *SyncTestChange) SetTakeOverRedundant(val OptBool) {
+	s.TakeOverRedundant = val
+}
+
+// SetTestId sets the value of TestId.
+func (s *SyncTestChange) SetTestId(val OptString) {
+	s.TestId = val
+}
+
+type SyncTestChangeAction string
+
+const (
+	SyncTestChangeActionCreate    SyncTestChangeAction = "create"
+	SyncTestChangeActionUpdate    SyncTestChangeAction = "update"
+	SyncTestChangeActionTakeOver  SyncTestChangeAction = "take_over"
+	SyncTestChangeActionArchive   SyncTestChangeAction = "archive"
+	SyncTestChangeActionUnchanged SyncTestChangeAction = "unchanged"
+)
+
+// AllValues returns all SyncTestChangeAction values.
+func (SyncTestChangeAction) AllValues() []SyncTestChangeAction {
+	return []SyncTestChangeAction{
+		SyncTestChangeActionCreate,
+		SyncTestChangeActionUpdate,
+		SyncTestChangeActionTakeOver,
+		SyncTestChangeActionArchive,
+		SyncTestChangeActionUnchanged,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s SyncTestChangeAction) MarshalText() ([]byte, error) {
+	switch s {
+	case SyncTestChangeActionCreate:
+		return []byte(s), nil
+	case SyncTestChangeActionUpdate:
+		return []byte(s), nil
+	case SyncTestChangeActionTakeOver:
+		return []byte(s), nil
+	case SyncTestChangeActionArchive:
+		return []byte(s), nil
+	case SyncTestChangeActionUnchanged:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *SyncTestChangeAction) UnmarshalText(data []byte) error {
+	switch SyncTestChangeAction(data) {
+	case SyncTestChangeActionCreate:
+		*s = SyncTestChangeActionCreate
+		return nil
+	case SyncTestChangeActionUpdate:
+		*s = SyncTestChangeActionUpdate
+		return nil
+	case SyncTestChangeActionTakeOver:
+		*s = SyncTestChangeActionTakeOver
+		return nil
+	case SyncTestChangeActionArchive:
+		*s = SyncTestChangeActionArchive
+		return nil
+	case SyncTestChangeActionUnchanged:
+		*s = SyncTestChangeActionUnchanged
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/SyncTestInput
+type SyncTestInput struct {
+	// The test, in natural language.
+	Description          string    `json:"description"`
+	DisabledCapabilities []string  `json:"disabledCapabilities"`
+	Draft                OptBool   `json:"draft"`
+	Folder               OptString `json:"folder"`
+	// Chosen by the customer. How Semaloop recognises the test.
+	Identifier string `json:"identifier"`
+	Name       string `json:"name"`
+	// Secret slugs.
+	Secrets []string `json:"secrets"`
+	Tags    []string `json:"tags"`
+	// A dashboard test to take over instead of creating a new one.
+	TakeOverTestId OptString `json:"takeOverTestId"`
+}
+
+// GetDescription returns the value of Description.
+func (s *SyncTestInput) GetDescription() string {
+	return s.Description
+}
+
+// GetDisabledCapabilities returns the value of DisabledCapabilities.
+func (s *SyncTestInput) GetDisabledCapabilities() []string {
+	return s.DisabledCapabilities
+}
+
+// GetDraft returns the value of Draft.
+func (s *SyncTestInput) GetDraft() OptBool {
+	return s.Draft
+}
+
+// GetFolder returns the value of Folder.
+func (s *SyncTestInput) GetFolder() OptString {
+	return s.Folder
+}
+
+// GetIdentifier returns the value of Identifier.
+func (s *SyncTestInput) GetIdentifier() string {
+	return s.Identifier
+}
+
+// GetName returns the value of Name.
+func (s *SyncTestInput) GetName() string {
+	return s.Name
+}
+
+// GetSecrets returns the value of Secrets.
+func (s *SyncTestInput) GetSecrets() []string {
+	return s.Secrets
+}
+
+// GetTags returns the value of Tags.
+func (s *SyncTestInput) GetTags() []string {
+	return s.Tags
+}
+
+// GetTakeOverTestId returns the value of TakeOverTestId.
+func (s *SyncTestInput) GetTakeOverTestId() OptString {
+	return s.TakeOverTestId
+}
+
+// SetDescription sets the value of Description.
+func (s *SyncTestInput) SetDescription(val string) {
+	s.Description = val
+}
+
+// SetDisabledCapabilities sets the value of DisabledCapabilities.
+func (s *SyncTestInput) SetDisabledCapabilities(val []string) {
+	s.DisabledCapabilities = val
+}
+
+// SetDraft sets the value of Draft.
+func (s *SyncTestInput) SetDraft(val OptBool) {
+	s.Draft = val
+}
+
+// SetFolder sets the value of Folder.
+func (s *SyncTestInput) SetFolder(val OptString) {
+	s.Folder = val
+}
+
+// SetIdentifier sets the value of Identifier.
+func (s *SyncTestInput) SetIdentifier(val string) {
+	s.Identifier = val
+}
+
+// SetName sets the value of Name.
+func (s *SyncTestInput) SetName(val string) {
+	s.Name = val
+}
+
+// SetSecrets sets the value of Secrets.
+func (s *SyncTestInput) SetSecrets(val []string) {
+	s.Secrets = val
+}
+
+// SetTags sets the value of Tags.
+func (s *SyncTestInput) SetTags(val []string) {
+	s.Tags = val
+}
+
+// SetTakeOverTestId sets the value of TakeOverTestId.
+func (s *SyncTestInput) SetTakeOverTestId(val OptString) {
+	s.TakeOverTestId = val
+}
+
+// Ref: #/components/schemas/SyncTestsRequest
+type SyncTestsRequest struct {
+	// Allow a sync that would archive every test in code.
+	AllowArchiveAll OptBool `json:"allowArchiveAll"`
+	// Reject the sync with a 409 if the app's revision has moved on since this one.
+	BaseRevision OptInt `json:"baseRevision"`
+	// Plan the changes without applying them.
+	DryRun OptBool         `json:"dryRun"`
+	Tests  []SyncTestInput `json:"tests"`
+}
+
+// GetAllowArchiveAll returns the value of AllowArchiveAll.
+func (s *SyncTestsRequest) GetAllowArchiveAll() OptBool {
+	return s.AllowArchiveAll
+}
+
+// GetBaseRevision returns the value of BaseRevision.
+func (s *SyncTestsRequest) GetBaseRevision() OptInt {
+	return s.BaseRevision
+}
+
+// GetDryRun returns the value of DryRun.
+func (s *SyncTestsRequest) GetDryRun() OptBool {
+	return s.DryRun
+}
+
+// GetTests returns the value of Tests.
+func (s *SyncTestsRequest) GetTests() []SyncTestInput {
+	return s.Tests
+}
+
+// SetAllowArchiveAll sets the value of AllowArchiveAll.
+func (s *SyncTestsRequest) SetAllowArchiveAll(val OptBool) {
+	s.AllowArchiveAll = val
+}
+
+// SetBaseRevision sets the value of BaseRevision.
+func (s *SyncTestsRequest) SetBaseRevision(val OptInt) {
+	s.BaseRevision = val
+}
+
+// SetDryRun sets the value of DryRun.
+func (s *SyncTestsRequest) SetDryRun(val OptBool) {
+	s.DryRun = val
+}
+
+// SetTests sets the value of Tests.
+func (s *SyncTestsRequest) SetTests(val []SyncTestInput) {
+	s.Tests = val
+}
+
+// Ref: #/components/schemas/SyncTestsResult
+type SyncTestsResult struct {
+	Changes  []SyncTestChange `json:"changes"`
+	DryRun   OptBool          `json:"dryRun"`
+	Revision int              `json:"revision"`
+}
+
+// GetChanges returns the value of Changes.
+func (s *SyncTestsResult) GetChanges() []SyncTestChange {
+	return s.Changes
+}
+
+// GetDryRun returns the value of DryRun.
+func (s *SyncTestsResult) GetDryRun() OptBool {
+	return s.DryRun
+}
+
+// GetRevision returns the value of Revision.
+func (s *SyncTestsResult) GetRevision() int {
+	return s.Revision
+}
+
+// SetChanges sets the value of Changes.
+func (s *SyncTestsResult) SetChanges(val []SyncTestChange) {
+	s.Changes = val
+}
+
+// SetDryRun sets the value of DryRun.
+func (s *SyncTestsResult) SetDryRun(val OptBool) {
+	s.DryRun = val
+}
+
+// SetRevision sets the value of Revision.
+func (s *SyncTestsResult) SetRevision(val int) {
+	s.Revision = val
+}

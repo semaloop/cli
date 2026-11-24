@@ -61,6 +61,31 @@ App bundles (`.aab`), XAPK or APK-set containers, and split APKs aren't accepted
 
 You can specify `--git-repo`, `--git-commit` and `--git-ref`, which allows Semaloop to report the results back as a status check on the commit or pull request. You must have connected your repository to Semaloop via our web dashboard for this to work. All three arguments must be specified.
 
+### `semaloop test`
+
+Lets you keep your tests as Markdown files in your app's repository, one file per test in `.semaloop/tests` (subdirectories are fine). The frontmatter holds the test's settings and the body is the test, written in natural language:
+
+```markdown
+---
+identifier: sign-in
+name: Sign in with email
+folder: Smoke
+draft: false
+tags: [smoke, regression]
+secrets: [test-account]
+disabled_capabilities: [audio_input]
+---
+
+Open the app and sign in with the test account. Check that the home screen shows the account's first name.
+```
+
+`identifier` and `name` are required. Semaloop recognises a test by its `identifier`, so renaming the file is safe but changing `identifier` creates a new test. `secrets` lists secrets by slug. Leaving it out gives a new test the app's default secrets and keeps an existing test's secrets as they are. Leaving out `tags` or `disabled_capabilities` means the test has none.
+
+- `semaloop test check` checks the files offline, without an API key, and reports every error with its file and line.
+- `semaloop test sync` checks the files, then creates, updates and archives tests in Semaloop to match them. Deleting a file archives its test. A sync that would archive every test in code is refused unless you pass `--allow-archive-all`.
+
+Both commands read `.semaloop/tests` by default, or the directory you pass.
+
 ## GitHub Actions
 
 Some of the `semaloop cli` commands come with a pre-packaged GitHub Action that you can drop in to your GitHub workflows.

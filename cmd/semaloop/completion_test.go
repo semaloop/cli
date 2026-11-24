@@ -99,12 +99,15 @@ func TestCompletionRegisterAnswersTab(t *testing.T) {
 		line string
 		want []string
 	}{
-		{"semaloop ", []string{"auth", "build", "completion"}},
+		{"semaloop ", []string{"auth", "build", "completion", "test"}},
+		{"semaloop test ", []string{"check", "sync"}},
+		{"semaloop test sync --allow", []string{"--allow-archive-all"}},
 		{"semaloop auth lo", []string{"login", "logout"}},
 		{"semaloop completion ", []string{"bash", "fish", "zsh"}},
 		{"semaloop build push --git-r", []string{"--git-ref", "--git-repo"}},
 		// Paths complete only where a path is expected.
 		{"semaloop build push My", []string{"MyApp.apk", "MyApp.ipa"}},
+		{"semaloop test check My", []string{"MyApp.apk", "MyApp.ipa"}},
 		{"semaloop completion zsh ", nil},
 	}
 	for _, tt := range tests {
