@@ -1176,6 +1176,8 @@ type SyncTestChange struct {
 	Fields []SyncTestChangeFieldsItem `json:"fields"`
 	// The test's identifier in code.
 	Identifier string `json:"identifier"`
+	// The test's name, for an archive, which has no file to read it from.
+	Name OptString `json:"name"`
 	// `takeOverTestId` names the test already in code under this identifier, so it can be removed.
 	TakeOverRedundant OptSyncTestChangeTakeOverRedundant `json:"takeOverRedundant"`
 	// The Semaloop test ID; null for a create on a dry run.
@@ -1195,6 +1197,11 @@ func (s *SyncTestChange) GetFields() []SyncTestChangeFieldsItem {
 // GetIdentifier returns the value of Identifier.
 func (s *SyncTestChange) GetIdentifier() string {
 	return s.Identifier
+}
+
+// GetName returns the value of Name.
+func (s *SyncTestChange) GetName() OptString {
+	return s.Name
 }
 
 // GetTakeOverRedundant returns the value of TakeOverRedundant.
@@ -1220,6 +1227,11 @@ func (s *SyncTestChange) SetFields(val []SyncTestChangeFieldsItem) {
 // SetIdentifier sets the value of Identifier.
 func (s *SyncTestChange) SetIdentifier(val string) {
 	s.Identifier = val
+}
+
+// SetName sets the value of Name.
+func (s *SyncTestChange) SetName(val OptString) {
+	s.Name = val
 }
 
 // SetTakeOverRedundant sets the value of TakeOverRedundant.
