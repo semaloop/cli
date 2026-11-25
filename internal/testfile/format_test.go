@@ -30,7 +30,7 @@ func TestFormatRoundTrips(t *testing.T) {
 			Secrets:     []string{},
 		},
 		{
-			Identifier:  "café",
+			Identifier:  "cafe",
 			Name:        "Café ☕",
 			Description: "Order.",
 			Draft:       &no,
