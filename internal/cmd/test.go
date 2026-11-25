@@ -8,8 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
+	"net/http/httptrace"
 	"strings"
+	"sync/atomic"
 
 	"github.com/charmbracelet/log"
 	"github.com/semaloop/cli/internal/api"
@@ -145,6 +146,13 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 		req.Tests = append(req.Tests, syncInput(t))
 	}
 
+	// Whether any of the request reached the connection. Until it has, a
+	// failure means the server can't have seen the sync.
+	var sent atomic.Bool
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		WroteHeaders: func() { sent.Store(true) },
+	})
+
 	res, err := s.api.PostSyncTests(ctx, req)
 	if err != nil {
 		switch code := statusCode(err); {
@@ -155,16 +163,17 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 			// doesn't expect, so this isn't a connection problem.
 			return nil, fmt.Errorf("unexpected response from Semaloop: %d %s", code, http.StatusText(code))
 		}
-		// net/http reports every transport failure as a *url.Error. Anything
-		// else happened after the server answered, so it may have applied
-		// the sync.
-		if urlErr := (*url.Error)(nil); errors.As(err, &urlErr) {
+		// A failure before the request was sent, such as a failed dial,
+		// can't have changed anything. Once it's been sent, the server may
+		// have applied the sync before the connection broke, or before an
+		// answer that couldn't be read.
+		if !sent.Load() {
 			return nil, fmt.Errorf("could not connect to Semaloop: %w", err)
 		}
 		if dryRun {
-			return nil, fmt.Errorf("could not read the response from Semaloop: %w", err)
+			return nil, fmt.Errorf("could not get a response from Semaloop: %w", err)
 		}
-		return nil, fmt.Errorf("could not read the response from Semaloop, so the sync may have been applied: %w", err)
+		return nil, fmt.Errorf("could not get a response from Semaloop, so the sync may have been applied: %w", err)
 	}
 
 	switch r := res.(type) {

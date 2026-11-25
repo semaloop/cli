@@ -520,6 +520,40 @@ func TestSyncUnreadableResponseMayHaveApplied(t *testing.T) {
 	}
 }
 
+func TestSyncConnectionClosedAfterRequestMayHaveApplied(t *testing.T) {
+	// The server reads the whole request, as if it applied the sync, then
+	// closes the connection without answering.
+	received := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		received <- string(body)
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Errorf("could not hijack: %v", err)
+			return
+		}
+		conn.Close()
+	}))
+	t.Cleanup(srv.Close)
+
+	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
+	tests, err := CheckTests(dir, io.Discard, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := NewSyncClient("key", srv.URL, dir, tests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Sync(context.Background(), c, io.Discard, SyncOptions{})
+	if err == nil || !strings.Contains(err.Error(), "the sync may have been applied") {
+		t.Errorf("expected a may-have-been-applied error, got %v", err)
+	}
+	if body := <-received; !strings.Contains(body, `"checkout"`) {
+		t.Errorf("expected the server to get the sync, got %s", body)
+	}
+}
+
 func TestSyncConnectionError(t *testing.T) {
 	srv := newSyncServer(t)
 	c := srv.client(writeTestFiles(t, map[string]string{"checkout.md": checkoutFile}))
