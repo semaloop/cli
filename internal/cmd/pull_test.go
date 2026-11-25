@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -280,5 +281,22 @@ func TestWritePullRejectsUnplannedReplace(t *testing.T) {
 	}
 	if data, _ := os.ReadFile(path); string(data) != pulledA {
 		t.Errorf("file was replaced: %q", data)
+	}
+}
+
+func TestPlanPullKeepsIdentifiersWithinTheLimit(t *testing.T) {
+	long := strings.Repeat("word ", 40)
+	plan := mustPlan(t, t.TempDir(), []DashboardTest{
+		{ID: "a", Name: long, Description: "A."},
+		{ID: "b", Name: long, Description: "B."},
+	}, nil, PullOptions{})
+	for _, f := range plan.Files {
+		if n := len(f.Test.Identifier); n > 128 || strings.HasSuffix(strings.TrimSuffix(f.Test.Identifier, "-2"), "-") {
+			t.Errorf("identifier %q is %d characters", f.Test.Identifier, n)
+		}
+		data := testfile.Format(f.Test)
+		if _, errs := testfile.Parse(f.Path, data); len(errs) > 0 {
+			t.Errorf("pulled file doesn't check: %v", errs)
+		}
 	}
 }

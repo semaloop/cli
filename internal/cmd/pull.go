@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/semaloop/cli/internal/testfile"
 )
@@ -124,7 +125,7 @@ func PlanPull(dir string, remote []DashboardTest, local []testfile.Test, opts Pu
 		if r.Folder != "" {
 			folderDir = filepath.Join(dir, cmp.Or(testfile.Slug(r.Folder), "folder"))
 		}
-		base := cmp.Or(testfile.Slug(r.Name), "test")
+		base := cmp.Or(truncateSlug(testfile.Slug(r.Name), maxIdentifierBase), "test")
 		id, path := base, ""
 		for n := 2; ; n++ {
 			path = filepath.Join(folderDir, id+".md")
@@ -144,6 +145,19 @@ func PlanPull(dir string, remote []DashboardTest, local []testfile.Test, opts Pu
 		plan.Files = append(plan.Files, PulledFile{Path: path, Test: fileTest(r, id, path)})
 	}
 	return plan, nil
+}
+
+// maxIdentifierBase leaves room for a "-N" suffix within the API's
+// 128-character limit on identifiers.
+const maxIdentifierBase = 120
+
+// truncateSlug cuts slug to at most n characters, without leaving a dash at
+// the end. Slugs are ASCII, so characters are bytes.
+func truncateSlug(slug string, n int) string {
+	if len(slug) <= n {
+		return slug
+	}
+	return strings.TrimRight(slug[:n], "-")
 }
 
 func fileTest(r DashboardTest, identifier, path string) testfile.Test {
