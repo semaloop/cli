@@ -74,8 +74,8 @@ func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer
 		return SyncResult{}, fmt.Errorf("could not initialise API client: %w", err)
 	}
 
-	req := &api.SyncTestsRequest{
-		Tests:           make([]api.SyncTestInput, 0, len(tests)),
+	req := api.PostSyncTestsReq{
+		Tests:           make([]api.ManagedTestInput, 0, len(tests)),
 		AllowArchiveAll: api.NewOptBool(opts.AllowArchiveAll),
 	}
 	for _, t := range tests {
@@ -83,7 +83,7 @@ func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer
 	}
 
 	log.Info("Syncing tests.", "dir", dir, "tests", len(tests))
-	res, err := c.PostSyncTests(ctx, req)
+	res, err := c.PostSyncTests(ctx, api.NewOptPostSyncTestsReq(req))
 	if err != nil {
 		switch code := statusCode(err); {
 		case code == http.StatusForbidden:
@@ -103,12 +103,14 @@ func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer
 	}
 
 	switch r := res.(type) {
-	case *api.PostSyncTestsOK:
-		result := SyncResult{Revision: r.Result.Revision, Changes: r.Result.Changes}
+	case *api.SyncTestsResponse:
+		result := SyncResult{Revision: r.Revision, Changes: r.Changes}
 		writeChanges(out, dir, tests, result.Changes)
 		return result, nil
 	case *api.PostSyncTestsBadRequest:
 		return SyncResult{}, fmt.Errorf("sync rejected: %s", errorMessages(r.Errors))
+	case *api.PostSyncTestsForbidden:
+		return SyncResult{}, client.ErrForbidden
 	case *api.PostSyncTestsConflict:
 		return SyncResult{}, fmt.Errorf("sync conflict: %s", errorMessages(r.Errors))
 	case *api.PostSyncTestsUnauthorized:
@@ -119,8 +121,8 @@ func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer
 }
 
 // syncInput maps a test file to the sync request's fields.
-func syncInput(t testfile.Test) api.SyncTestInput {
-	in := api.SyncTestInput{
+func syncInput(t testfile.Test) api.ManagedTestInput {
+	in := api.ManagedTestInput{
 		Identifier:  t.Identifier,
 		Name:        t.Name,
 		Description: t.Description,
@@ -129,10 +131,10 @@ func syncInput(t testfile.Test) api.SyncTestInput {
 		// a missing field differently from an empty one.
 		Tags:                 orEmpty(t.Tags),
 		Secrets:              t.Secrets,
-		DisabledCapabilities: orEmpty(t.DisabledCapabilities),
+		DisabledCapabilities: capabilities(t.DisabledCapabilities),
 	}
 	if t.Folder != "" {
-		in.Folder = api.NewOptString(t.Folder)
+		in.Folder = api.NewOptNilString(t.Folder)
 	}
 	if t.Draft != nil {
 		in.Draft = api.NewOptBool(*t.Draft)
@@ -148,6 +150,14 @@ func orEmpty(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+func capabilities(names []string) []api.TestCapabilityName {
+	caps := make([]api.TestCapabilityName, len(names))
+	for i, n := range names {
+		caps[i] = api.TestCapabilityName(n)
+	}
+	return caps
 }
 
 func errorMessages(errs []api.ErrorResponseErrorsItem) string {
@@ -208,7 +218,7 @@ func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []ap
 		if len(ch.Fields) > 0 {
 			names := make([]string, len(ch.Fields))
 			for j, f := range ch.Fields {
-				names[j] = snakeCase(f)
+				names[j] = snakeCase(string(f))
 			}
 			detail += ": " + strings.Join(names, ", ")
 		}

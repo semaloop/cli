@@ -286,6 +286,347 @@ func (FinalizeUploadSuccessResponseSuccess) AllValues() []FinalizeUploadSuccessR
 	}
 }
 
+type GetListTestsForbidden ErrorResponse
+
+func (*GetListTestsForbidden) getListTestsRes() {}
+
+type GetListTestsUnauthorized ErrorResponse
+
+func (*GetListTestsUnauthorized) getListTestsRes() {}
+
+// Ref: #/components/schemas/ListTestsResponse
+type ListTestsResponse struct {
+	Success ListTestsResponseSuccess `json:"success"`
+	Tests   []ListedTest             `json:"tests"`
+}
+
+// GetSuccess returns the value of Success.
+func (s *ListTestsResponse) GetSuccess() ListTestsResponseSuccess {
+	return s.Success
+}
+
+// GetTests returns the value of Tests.
+func (s *ListTestsResponse) GetTests() []ListedTest {
+	return s.Tests
+}
+
+// SetSuccess sets the value of Success.
+func (s *ListTestsResponse) SetSuccess(val ListTestsResponseSuccess) {
+	s.Success = val
+}
+
+// SetTests sets the value of Tests.
+func (s *ListTestsResponse) SetTests(val []ListedTest) {
+	s.Tests = val
+}
+
+func (*ListTestsResponse) getListTestsRes() {}
+
+type ListTestsResponseSuccess bool
+
+const (
+	ListTestsResponseSuccessTrue ListTestsResponseSuccess = true
+)
+
+// AllValues returns all ListTestsResponseSuccess values.
+func (ListTestsResponseSuccess) AllValues() []ListTestsResponseSuccess {
+	return []ListTestsResponseSuccess{
+		ListTestsResponseSuccessTrue,
+	}
+}
+
+// Ref: #/components/schemas/ListedTest
+type ListedTest struct {
+	// Capabilities the spec requires or that have been disabled.
+	Capabilities []ListedTestCapabilitiesItem `json:"capabilities"`
+	// The test's current spec.
+	Description string `json:"description"`
+	Draft       bool   `json:"draft"`
+	// The test's identifier in code; null for a test managed in the dashboard.
+	ExternalId NilString `json:"externalId"`
+	// Folder name.
+	Folder NilString `json:"folder"`
+	// The Semaloop test ID.
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Slugs of the linked secrets.
+	Secrets []string `json:"secrets"`
+	Tags    []string `json:"tags"`
+}
+
+// GetCapabilities returns the value of Capabilities.
+func (s *ListedTest) GetCapabilities() []ListedTestCapabilitiesItem {
+	return s.Capabilities
+}
+
+// GetDescription returns the value of Description.
+func (s *ListedTest) GetDescription() string {
+	return s.Description
+}
+
+// GetDraft returns the value of Draft.
+func (s *ListedTest) GetDraft() bool {
+	return s.Draft
+}
+
+// GetExternalId returns the value of ExternalId.
+func (s *ListedTest) GetExternalId() NilString {
+	return s.ExternalId
+}
+
+// GetFolder returns the value of Folder.
+func (s *ListedTest) GetFolder() NilString {
+	return s.Folder
+}
+
+// GetID returns the value of ID.
+func (s *ListedTest) GetID() string {
+	return s.ID
+}
+
+// GetName returns the value of Name.
+func (s *ListedTest) GetName() string {
+	return s.Name
+}
+
+// GetSecrets returns the value of Secrets.
+func (s *ListedTest) GetSecrets() []string {
+	return s.Secrets
+}
+
+// GetTags returns the value of Tags.
+func (s *ListedTest) GetTags() []string {
+	return s.Tags
+}
+
+// SetCapabilities sets the value of Capabilities.
+func (s *ListedTest) SetCapabilities(val []ListedTestCapabilitiesItem) {
+	s.Capabilities = val
+}
+
+// SetDescription sets the value of Description.
+func (s *ListedTest) SetDescription(val string) {
+	s.Description = val
+}
+
+// SetDraft sets the value of Draft.
+func (s *ListedTest) SetDraft(val bool) {
+	s.Draft = val
+}
+
+// SetExternalId sets the value of ExternalId.
+func (s *ListedTest) SetExternalId(val NilString) {
+	s.ExternalId = val
+}
+
+// SetFolder sets the value of Folder.
+func (s *ListedTest) SetFolder(val NilString) {
+	s.Folder = val
+}
+
+// SetID sets the value of ID.
+func (s *ListedTest) SetID(val string) {
+	s.ID = val
+}
+
+// SetName sets the value of Name.
+func (s *ListedTest) SetName(val string) {
+	s.Name = val
+}
+
+// SetSecrets sets the value of Secrets.
+func (s *ListedTest) SetSecrets(val []string) {
+	s.Secrets = val
+}
+
+// SetTags sets the value of Tags.
+func (s *ListedTest) SetTags(val []string) {
+	s.Tags = val
+}
+
+type ListedTestCapabilitiesItem struct {
+	// Treated as not required, even if the description asks for it.
+	Disabled bool               `json:"disabled"`
+	Name     TestCapabilityName `json:"name"`
+}
+
+// GetDisabled returns the value of Disabled.
+func (s *ListedTestCapabilitiesItem) GetDisabled() bool {
+	return s.Disabled
+}
+
+// GetName returns the value of Name.
+func (s *ListedTestCapabilitiesItem) GetName() TestCapabilityName {
+	return s.Name
+}
+
+// SetDisabled sets the value of Disabled.
+func (s *ListedTestCapabilitiesItem) SetDisabled(val bool) {
+	s.Disabled = val
+}
+
+// SetName sets the value of Name.
+func (s *ListedTestCapabilitiesItem) SetName(val TestCapabilityName) {
+	s.Name = val
+}
+
+// Ref: #/components/schemas/ManagedTestInput
+type ManagedTestInput struct {
+	Description string `json:"description"`
+	// Device capabilities to treat as not required, even if the description asks for them. If omitted, a
+	// new test has none disabled and an existing test keeps its current ones.
+	DisabledCapabilities []TestCapabilityName `json:"disabledCapabilities"`
+	Draft                OptBool              `json:"draft"`
+	// Folder name; created if it doesn't exist.
+	Folder OptNilString `json:"folder"`
+	// Stable identifier for the test in code, unique within the app. Not a Semaloop test ID.
+	Identifier string `json:"identifier"`
+	Name       string `json:"name"`
+	// Slugs of the app's secrets to link. If omitted, a new test gets the app's defaults and an existing
+	// test keeps its current secrets.
+	Secrets []string `json:"secrets"`
+	// The test's tags. If omitted, the test has none. Changing tags never starts a run.
+	Tags []string `json:"tags"`
+	// Semaloop test ID of a test in this app to take over, instead of creating a new test. It keeps its
+	// run history and Skills.
+	TakeOverTestId OptString `json:"takeOverTestId"`
+}
+
+// GetDescription returns the value of Description.
+func (s *ManagedTestInput) GetDescription() string {
+	return s.Description
+}
+
+// GetDisabledCapabilities returns the value of DisabledCapabilities.
+func (s *ManagedTestInput) GetDisabledCapabilities() []TestCapabilityName {
+	return s.DisabledCapabilities
+}
+
+// GetDraft returns the value of Draft.
+func (s *ManagedTestInput) GetDraft() OptBool {
+	return s.Draft
+}
+
+// GetFolder returns the value of Folder.
+func (s *ManagedTestInput) GetFolder() OptNilString {
+	return s.Folder
+}
+
+// GetIdentifier returns the value of Identifier.
+func (s *ManagedTestInput) GetIdentifier() string {
+	return s.Identifier
+}
+
+// GetName returns the value of Name.
+func (s *ManagedTestInput) GetName() string {
+	return s.Name
+}
+
+// GetSecrets returns the value of Secrets.
+func (s *ManagedTestInput) GetSecrets() []string {
+	return s.Secrets
+}
+
+// GetTags returns the value of Tags.
+func (s *ManagedTestInput) GetTags() []string {
+	return s.Tags
+}
+
+// GetTakeOverTestId returns the value of TakeOverTestId.
+func (s *ManagedTestInput) GetTakeOverTestId() OptString {
+	return s.TakeOverTestId
+}
+
+// SetDescription sets the value of Description.
+func (s *ManagedTestInput) SetDescription(val string) {
+	s.Description = val
+}
+
+// SetDisabledCapabilities sets the value of DisabledCapabilities.
+func (s *ManagedTestInput) SetDisabledCapabilities(val []TestCapabilityName) {
+	s.DisabledCapabilities = val
+}
+
+// SetDraft sets the value of Draft.
+func (s *ManagedTestInput) SetDraft(val OptBool) {
+	s.Draft = val
+}
+
+// SetFolder sets the value of Folder.
+func (s *ManagedTestInput) SetFolder(val OptNilString) {
+	s.Folder = val
+}
+
+// SetIdentifier sets the value of Identifier.
+func (s *ManagedTestInput) SetIdentifier(val string) {
+	s.Identifier = val
+}
+
+// SetName sets the value of Name.
+func (s *ManagedTestInput) SetName(val string) {
+	s.Name = val
+}
+
+// SetSecrets sets the value of Secrets.
+func (s *ManagedTestInput) SetSecrets(val []string) {
+	s.Secrets = val
+}
+
+// SetTags sets the value of Tags.
+func (s *ManagedTestInput) SetTags(val []string) {
+	s.Tags = val
+}
+
+// SetTakeOverTestId sets the value of TakeOverTestId.
+func (s *ManagedTestInput) SetTakeOverTestId(val OptString) {
+	s.TakeOverTestId = val
+}
+
+// NewNilString returns new NilString with value set to v.
+func NewNilString(v string) NilString {
+	return NilString{
+		Value: v,
+	}
+}
+
+// NilString is nullable string.
+type NilString struct {
+	Value string
+	Null  bool
+}
+
+// SetTo sets value to v.
+func (o *NilString) SetTo(v string) {
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o NilString) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *NilString) SetToNull() {
+	o.Null = true
+	var v string
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o NilString) Get() (v string, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o NilString) Or(d string) string {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptBool returns new OptBool with value set to v.
 func NewOptBool(v bool) OptBool {
 	return OptBool{
@@ -424,6 +765,69 @@ func (o OptInt) Or(d int) int {
 	return d
 }
 
+// NewOptNilString returns new OptNilString with value set to v.
+func NewOptNilString(v string) OptNilString {
+	return OptNilString{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilString is optional nullable string.
+type OptNilString struct {
+	Value string
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilString was set.
+func (o OptNilString) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilString) Reset() {
+	var v string
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilString) SetTo(v string) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilString) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilString) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v string
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilString) Get() (v string, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilString) Or(d string) string {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptPostFinalizeUploadReq returns new OptPostFinalizeUploadReq with value set to v.
 func NewOptPostFinalizeUploadReq(v PostFinalizeUploadReq) OptPostFinalizeUploadReq {
 	return OptPostFinalizeUploadReq{
@@ -464,6 +868,52 @@ func (o OptPostFinalizeUploadReq) Get() (v PostFinalizeUploadReq, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptPostFinalizeUploadReq) Or(d PostFinalizeUploadReq) PostFinalizeUploadReq {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptPostSyncTestsReq returns new OptPostSyncTestsReq with value set to v.
+func NewOptPostSyncTestsReq(v PostSyncTestsReq) OptPostSyncTestsReq {
+	return OptPostSyncTestsReq{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptPostSyncTestsReq is optional PostSyncTestsReq.
+type OptPostSyncTestsReq struct {
+	Value PostSyncTestsReq
+	Set   bool
+}
+
+// IsSet returns true if OptPostSyncTestsReq was set.
+func (o OptPostSyncTestsReq) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptPostSyncTestsReq) Reset() {
+	var v PostSyncTestsReq
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptPostSyncTestsReq) SetTo(v PostSyncTestsReq) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptPostSyncTestsReq) Get() (v PostSyncTestsReq, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptPostSyncTestsReq) Or(d PostSyncTestsReq) PostSyncTestsReq {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -516,6 +966,52 @@ func (o OptString) Or(d string) string {
 	return d
 }
 
+// NewOptSyncTestChangeTakeOverRedundant returns new OptSyncTestChangeTakeOverRedundant with value set to v.
+func NewOptSyncTestChangeTakeOverRedundant(v SyncTestChangeTakeOverRedundant) OptSyncTestChangeTakeOverRedundant {
+	return OptSyncTestChangeTakeOverRedundant{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptSyncTestChangeTakeOverRedundant is optional SyncTestChangeTakeOverRedundant.
+type OptSyncTestChangeTakeOverRedundant struct {
+	Value SyncTestChangeTakeOverRedundant
+	Set   bool
+}
+
+// IsSet returns true if OptSyncTestChangeTakeOverRedundant was set.
+func (o OptSyncTestChangeTakeOverRedundant) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptSyncTestChangeTakeOverRedundant) Reset() {
+	var v SyncTestChangeTakeOverRedundant
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptSyncTestChangeTakeOverRedundant) SetTo(v SyncTestChangeTakeOverRedundant) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptSyncTestChangeTakeOverRedundant) Get() (v SyncTestChangeTakeOverRedundant, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptSyncTestChangeTakeOverRedundant) Or(d SyncTestChangeTakeOverRedundant) SyncTestChangeTakeOverRedundant {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 type PostCreateUploadOK struct {
 	Result  CreateUploadResponse `json:"result"`
 	Success bool                 `json:"success"`
@@ -556,6 +1052,10 @@ type PostFinalizeUploadReq struct {
 	// recording it as a distinct build instead of rejecting it. Defaults to false.
 	AllowDuplicateVersion OptBool                 `json:"allowDuplicateVersion"`
 	GitRef                OptFinalizeUploadGitRef `json:"gitRef"`
+	// When true, the build is hidden. Use it for branch builds. A hidden build is always recorded as a
+	// distinct build, never starts tests automatically, and is left out of build lists and latest-build
+	// lookups; tests can still be run on it by build ID.
+	Hidden OptBool `json:"hidden"`
 	// Upload ID returned by POST /api/v1/uploads.
 	ID string `json:"id"`
 }
@@ -568,6 +1068,11 @@ func (s *PostFinalizeUploadReq) GetAllowDuplicateVersion() OptBool {
 // GetGitRef returns the value of GitRef.
 func (s *PostFinalizeUploadReq) GetGitRef() OptFinalizeUploadGitRef {
 	return s.GitRef
+}
+
+// GetHidden returns the value of Hidden.
+func (s *PostFinalizeUploadReq) GetHidden() OptBool {
+	return s.Hidden
 }
 
 // GetID returns the value of ID.
@@ -583,6 +1088,11 @@ func (s *PostFinalizeUploadReq) SetAllowDuplicateVersion(val OptBool) {
 // SetGitRef sets the value of GitRef.
 func (s *PostFinalizeUploadReq) SetGitRef(val OptFinalizeUploadGitRef) {
 	s.GitRef = val
+}
+
+// SetHidden sets the value of Hidden.
+func (s *PostFinalizeUploadReq) SetHidden(val OptBool) {
+	s.Hidden = val
 }
 
 // SetID sets the value of ID.
@@ -602,32 +1112,59 @@ type PostSyncTestsConflict ErrorResponse
 
 func (*PostSyncTestsConflict) postSyncTestsRes() {}
 
-type PostSyncTestsOK struct {
-	Result  SyncTestsResult `json:"result"`
-	Success bool            `json:"success"`
+type PostSyncTestsForbidden ErrorResponse
+
+func (*PostSyncTestsForbidden) postSyncTestsRes() {}
+
+type PostSyncTestsReq struct {
+	// Allow a sync that would archive every test managed in code. Not needed while the app has none.
+	AllowArchiveAll OptBool `json:"allowArchiveAll"`
+	// Apply only if the tests are still at this revision, as returned by a dry run.
+	BaseRevision OptInt `json:"baseRevision"`
+	// Return the plan without applying it.
+	DryRun OptBool            `json:"dryRun"`
+	Tests  []ManagedTestInput `json:"tests"`
 }
 
-// GetResult returns the value of Result.
-func (s *PostSyncTestsOK) GetResult() SyncTestsResult {
-	return s.Result
+// GetAllowArchiveAll returns the value of AllowArchiveAll.
+func (s *PostSyncTestsReq) GetAllowArchiveAll() OptBool {
+	return s.AllowArchiveAll
 }
 
-// GetSuccess returns the value of Success.
-func (s *PostSyncTestsOK) GetSuccess() bool {
-	return s.Success
+// GetBaseRevision returns the value of BaseRevision.
+func (s *PostSyncTestsReq) GetBaseRevision() OptInt {
+	return s.BaseRevision
 }
 
-// SetResult sets the value of Result.
-func (s *PostSyncTestsOK) SetResult(val SyncTestsResult) {
-	s.Result = val
+// GetDryRun returns the value of DryRun.
+func (s *PostSyncTestsReq) GetDryRun() OptBool {
+	return s.DryRun
 }
 
-// SetSuccess sets the value of Success.
-func (s *PostSyncTestsOK) SetSuccess(val bool) {
-	s.Success = val
+// GetTests returns the value of Tests.
+func (s *PostSyncTestsReq) GetTests() []ManagedTestInput {
+	return s.Tests
 }
 
-func (*PostSyncTestsOK) postSyncTestsRes() {}
+// SetAllowArchiveAll sets the value of AllowArchiveAll.
+func (s *PostSyncTestsReq) SetAllowArchiveAll(val OptBool) {
+	s.AllowArchiveAll = val
+}
+
+// SetBaseRevision sets the value of BaseRevision.
+func (s *PostSyncTestsReq) SetBaseRevision(val OptInt) {
+	s.BaseRevision = val
+}
+
+// SetDryRun sets the value of DryRun.
+func (s *PostSyncTestsReq) SetDryRun(val OptBool) {
+	s.DryRun = val
+}
+
+// SetTests sets the value of Tests.
+func (s *PostSyncTestsReq) SetTests(val []ManagedTestInput) {
+	s.Tests = val
+}
 
 type PostSyncTestsUnauthorized ErrorResponse
 
@@ -635,13 +1172,14 @@ func (*PostSyncTestsUnauthorized) postSyncTestsRes() {}
 
 // Ref: #/components/schemas/SyncTestChange
 type SyncTestChange struct {
-	Action SyncTestChangeAction `json:"action"`
-	// Fields that change, for update and take_over.
-	Fields            []string  `json:"fields"`
-	Identifier        string    `json:"identifier"`
-	Name              OptString `json:"name"`
-	TakeOverRedundant OptBool   `json:"takeOverRedundant"`
-	TestId            OptString `json:"testId"`
+	Action SyncTestChangeAction       `json:"action"`
+	Fields []SyncTestChangeFieldsItem `json:"fields"`
+	// The test's identifier in code.
+	Identifier string `json:"identifier"`
+	// `takeOverTestId` names the test already in code under this identifier, so it can be removed.
+	TakeOverRedundant OptSyncTestChangeTakeOverRedundant `json:"takeOverRedundant"`
+	// The Semaloop test ID; null for a create on a dry run.
+	TestId NilString `json:"testId"`
 }
 
 // GetAction returns the value of Action.
@@ -650,7 +1188,7 @@ func (s *SyncTestChange) GetAction() SyncTestChangeAction {
 }
 
 // GetFields returns the value of Fields.
-func (s *SyncTestChange) GetFields() []string {
+func (s *SyncTestChange) GetFields() []SyncTestChangeFieldsItem {
 	return s.Fields
 }
 
@@ -659,18 +1197,13 @@ func (s *SyncTestChange) GetIdentifier() string {
 	return s.Identifier
 }
 
-// GetName returns the value of Name.
-func (s *SyncTestChange) GetName() OptString {
-	return s.Name
-}
-
 // GetTakeOverRedundant returns the value of TakeOverRedundant.
-func (s *SyncTestChange) GetTakeOverRedundant() OptBool {
+func (s *SyncTestChange) GetTakeOverRedundant() OptSyncTestChangeTakeOverRedundant {
 	return s.TakeOverRedundant
 }
 
 // GetTestId returns the value of TestId.
-func (s *SyncTestChange) GetTestId() OptString {
+func (s *SyncTestChange) GetTestId() NilString {
 	return s.TestId
 }
 
@@ -680,7 +1213,7 @@ func (s *SyncTestChange) SetAction(val SyncTestChangeAction) {
 }
 
 // SetFields sets the value of Fields.
-func (s *SyncTestChange) SetFields(val []string) {
+func (s *SyncTestChange) SetFields(val []SyncTestChangeFieldsItem) {
 	s.Fields = val
 }
 
@@ -689,18 +1222,13 @@ func (s *SyncTestChange) SetIdentifier(val string) {
 	s.Identifier = val
 }
 
-// SetName sets the value of Name.
-func (s *SyncTestChange) SetName(val OptString) {
-	s.Name = val
-}
-
 // SetTakeOverRedundant sets the value of TakeOverRedundant.
-func (s *SyncTestChange) SetTakeOverRedundant(val OptBool) {
+func (s *SyncTestChange) SetTakeOverRedundant(val OptSyncTestChangeTakeOverRedundant) {
 	s.TakeOverRedundant = val
 }
 
 // SetTestId sets the value of TestId.
-func (s *SyncTestChange) SetTestId(val OptString) {
+func (s *SyncTestChange) SetTestId(val NilString) {
 	s.TestId = val
 }
 
@@ -766,197 +1294,201 @@ func (s *SyncTestChangeAction) UnmarshalText(data []byte) error {
 	}
 }
 
-// Ref: #/components/schemas/SyncTestInput
-type SyncTestInput struct {
-	// The test, in natural language.
-	Description          string    `json:"description"`
-	DisabledCapabilities []string  `json:"disabledCapabilities"`
-	Draft                OptBool   `json:"draft"`
-	Folder               OptString `json:"folder"`
-	// Chosen by the customer. How Semaloop recognises the test.
-	Identifier string `json:"identifier"`
-	Name       string `json:"name"`
-	// Secret slugs.
-	Secrets []string `json:"secrets"`
-	Tags    []string `json:"tags"`
-	// A dashboard test to take over instead of creating a new one.
-	TakeOverTestId OptString `json:"takeOverTestId"`
+type SyncTestChangeFieldsItem string
+
+const (
+	SyncTestChangeFieldsItemName                 SyncTestChangeFieldsItem = "name"
+	SyncTestChangeFieldsItemDescription          SyncTestChangeFieldsItem = "description"
+	SyncTestChangeFieldsItemFolder               SyncTestChangeFieldsItem = "folder"
+	SyncTestChangeFieldsItemDraft                SyncTestChangeFieldsItem = "draft"
+	SyncTestChangeFieldsItemRestored             SyncTestChangeFieldsItem = "restored"
+	SyncTestChangeFieldsItemTags                 SyncTestChangeFieldsItem = "tags"
+	SyncTestChangeFieldsItemSecrets              SyncTestChangeFieldsItem = "secrets"
+	SyncTestChangeFieldsItemDisabledCapabilities SyncTestChangeFieldsItem = "disabledCapabilities"
+)
+
+// AllValues returns all SyncTestChangeFieldsItem values.
+func (SyncTestChangeFieldsItem) AllValues() []SyncTestChangeFieldsItem {
+	return []SyncTestChangeFieldsItem{
+		SyncTestChangeFieldsItemName,
+		SyncTestChangeFieldsItemDescription,
+		SyncTestChangeFieldsItemFolder,
+		SyncTestChangeFieldsItemDraft,
+		SyncTestChangeFieldsItemRestored,
+		SyncTestChangeFieldsItemTags,
+		SyncTestChangeFieldsItemSecrets,
+		SyncTestChangeFieldsItemDisabledCapabilities,
+	}
 }
 
-// GetDescription returns the value of Description.
-func (s *SyncTestInput) GetDescription() string {
-	return s.Description
+// MarshalText implements encoding.TextMarshaler.
+func (s SyncTestChangeFieldsItem) MarshalText() ([]byte, error) {
+	switch s {
+	case SyncTestChangeFieldsItemName:
+		return []byte(s), nil
+	case SyncTestChangeFieldsItemDescription:
+		return []byte(s), nil
+	case SyncTestChangeFieldsItemFolder:
+		return []byte(s), nil
+	case SyncTestChangeFieldsItemDraft:
+		return []byte(s), nil
+	case SyncTestChangeFieldsItemRestored:
+		return []byte(s), nil
+	case SyncTestChangeFieldsItemTags:
+		return []byte(s), nil
+	case SyncTestChangeFieldsItemSecrets:
+		return []byte(s), nil
+	case SyncTestChangeFieldsItemDisabledCapabilities:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
 }
 
-// GetDisabledCapabilities returns the value of DisabledCapabilities.
-func (s *SyncTestInput) GetDisabledCapabilities() []string {
-	return s.DisabledCapabilities
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *SyncTestChangeFieldsItem) UnmarshalText(data []byte) error {
+	switch SyncTestChangeFieldsItem(data) {
+	case SyncTestChangeFieldsItemName:
+		*s = SyncTestChangeFieldsItemName
+		return nil
+	case SyncTestChangeFieldsItemDescription:
+		*s = SyncTestChangeFieldsItemDescription
+		return nil
+	case SyncTestChangeFieldsItemFolder:
+		*s = SyncTestChangeFieldsItemFolder
+		return nil
+	case SyncTestChangeFieldsItemDraft:
+		*s = SyncTestChangeFieldsItemDraft
+		return nil
+	case SyncTestChangeFieldsItemRestored:
+		*s = SyncTestChangeFieldsItemRestored
+		return nil
+	case SyncTestChangeFieldsItemTags:
+		*s = SyncTestChangeFieldsItemTags
+		return nil
+	case SyncTestChangeFieldsItemSecrets:
+		*s = SyncTestChangeFieldsItemSecrets
+		return nil
+	case SyncTestChangeFieldsItemDisabledCapabilities:
+		*s = SyncTestChangeFieldsItemDisabledCapabilities
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }
 
-// GetDraft returns the value of Draft.
-func (s *SyncTestInput) GetDraft() OptBool {
-	return s.Draft
+// `takeOverTestId` names the test already in code under this identifier, so it can be removed.
+type SyncTestChangeTakeOverRedundant bool
+
+const (
+	SyncTestChangeTakeOverRedundantTrue SyncTestChangeTakeOverRedundant = true
+)
+
+// AllValues returns all SyncTestChangeTakeOverRedundant values.
+func (SyncTestChangeTakeOverRedundant) AllValues() []SyncTestChangeTakeOverRedundant {
+	return []SyncTestChangeTakeOverRedundant{
+		SyncTestChangeTakeOverRedundantTrue,
+	}
 }
 
-// GetFolder returns the value of Folder.
-func (s *SyncTestInput) GetFolder() OptString {
-	return s.Folder
-}
-
-// GetIdentifier returns the value of Identifier.
-func (s *SyncTestInput) GetIdentifier() string {
-	return s.Identifier
-}
-
-// GetName returns the value of Name.
-func (s *SyncTestInput) GetName() string {
-	return s.Name
-}
-
-// GetSecrets returns the value of Secrets.
-func (s *SyncTestInput) GetSecrets() []string {
-	return s.Secrets
-}
-
-// GetTags returns the value of Tags.
-func (s *SyncTestInput) GetTags() []string {
-	return s.Tags
-}
-
-// GetTakeOverTestId returns the value of TakeOverTestId.
-func (s *SyncTestInput) GetTakeOverTestId() OptString {
-	return s.TakeOverTestId
-}
-
-// SetDescription sets the value of Description.
-func (s *SyncTestInput) SetDescription(val string) {
-	s.Description = val
-}
-
-// SetDisabledCapabilities sets the value of DisabledCapabilities.
-func (s *SyncTestInput) SetDisabledCapabilities(val []string) {
-	s.DisabledCapabilities = val
-}
-
-// SetDraft sets the value of Draft.
-func (s *SyncTestInput) SetDraft(val OptBool) {
-	s.Draft = val
-}
-
-// SetFolder sets the value of Folder.
-func (s *SyncTestInput) SetFolder(val OptString) {
-	s.Folder = val
-}
-
-// SetIdentifier sets the value of Identifier.
-func (s *SyncTestInput) SetIdentifier(val string) {
-	s.Identifier = val
-}
-
-// SetName sets the value of Name.
-func (s *SyncTestInput) SetName(val string) {
-	s.Name = val
-}
-
-// SetSecrets sets the value of Secrets.
-func (s *SyncTestInput) SetSecrets(val []string) {
-	s.Secrets = val
-}
-
-// SetTags sets the value of Tags.
-func (s *SyncTestInput) SetTags(val []string) {
-	s.Tags = val
-}
-
-// SetTakeOverTestId sets the value of TakeOverTestId.
-func (s *SyncTestInput) SetTakeOverTestId(val OptString) {
-	s.TakeOverTestId = val
-}
-
-// Ref: #/components/schemas/SyncTestsRequest
-type SyncTestsRequest struct {
-	// Allow a sync that would archive every test in code.
-	AllowArchiveAll OptBool `json:"allowArchiveAll"`
-	// Reject the sync with a 409 if the app's revision has moved on since this one.
-	BaseRevision OptInt `json:"baseRevision"`
-	// Plan the changes without applying them.
-	DryRun OptBool         `json:"dryRun"`
-	Tests  []SyncTestInput `json:"tests"`
-}
-
-// GetAllowArchiveAll returns the value of AllowArchiveAll.
-func (s *SyncTestsRequest) GetAllowArchiveAll() OptBool {
-	return s.AllowArchiveAll
-}
-
-// GetBaseRevision returns the value of BaseRevision.
-func (s *SyncTestsRequest) GetBaseRevision() OptInt {
-	return s.BaseRevision
-}
-
-// GetDryRun returns the value of DryRun.
-func (s *SyncTestsRequest) GetDryRun() OptBool {
-	return s.DryRun
-}
-
-// GetTests returns the value of Tests.
-func (s *SyncTestsRequest) GetTests() []SyncTestInput {
-	return s.Tests
-}
-
-// SetAllowArchiveAll sets the value of AllowArchiveAll.
-func (s *SyncTestsRequest) SetAllowArchiveAll(val OptBool) {
-	s.AllowArchiveAll = val
-}
-
-// SetBaseRevision sets the value of BaseRevision.
-func (s *SyncTestsRequest) SetBaseRevision(val OptInt) {
-	s.BaseRevision = val
-}
-
-// SetDryRun sets the value of DryRun.
-func (s *SyncTestsRequest) SetDryRun(val OptBool) {
-	s.DryRun = val
-}
-
-// SetTests sets the value of Tests.
-func (s *SyncTestsRequest) SetTests(val []SyncTestInput) {
-	s.Tests = val
-}
-
-// Ref: #/components/schemas/SyncTestsResult
-type SyncTestsResult struct {
-	Changes  []SyncTestChange `json:"changes"`
-	DryRun   OptBool          `json:"dryRun"`
-	Revision int              `json:"revision"`
+// Ref: #/components/schemas/SyncTestsResponse
+type SyncTestsResponse struct {
+	Changes []SyncTestChange `json:"changes"`
+	// The tests' revision after this sync, or now for a dry run.
+	Revision int                      `json:"revision"`
+	Success  SyncTestsResponseSuccess `json:"success"`
 }
 
 // GetChanges returns the value of Changes.
-func (s *SyncTestsResult) GetChanges() []SyncTestChange {
+func (s *SyncTestsResponse) GetChanges() []SyncTestChange {
 	return s.Changes
 }
 
-// GetDryRun returns the value of DryRun.
-func (s *SyncTestsResult) GetDryRun() OptBool {
-	return s.DryRun
-}
-
 // GetRevision returns the value of Revision.
-func (s *SyncTestsResult) GetRevision() int {
+func (s *SyncTestsResponse) GetRevision() int {
 	return s.Revision
 }
 
+// GetSuccess returns the value of Success.
+func (s *SyncTestsResponse) GetSuccess() SyncTestsResponseSuccess {
+	return s.Success
+}
+
 // SetChanges sets the value of Changes.
-func (s *SyncTestsResult) SetChanges(val []SyncTestChange) {
+func (s *SyncTestsResponse) SetChanges(val []SyncTestChange) {
 	s.Changes = val
 }
 
-// SetDryRun sets the value of DryRun.
-func (s *SyncTestsResult) SetDryRun(val OptBool) {
-	s.DryRun = val
+// SetRevision sets the value of Revision.
+func (s *SyncTestsResponse) SetRevision(val int) {
+	s.Revision = val
 }
 
-// SetRevision sets the value of Revision.
-func (s *SyncTestsResult) SetRevision(val int) {
-	s.Revision = val
+// SetSuccess sets the value of Success.
+func (s *SyncTestsResponse) SetSuccess(val SyncTestsResponseSuccess) {
+	s.Success = val
+}
+
+func (*SyncTestsResponse) postSyncTestsRes() {}
+
+type SyncTestsResponseSuccess bool
+
+const (
+	SyncTestsResponseSuccessTrue SyncTestsResponseSuccess = true
+)
+
+// AllValues returns all SyncTestsResponseSuccess values.
+func (SyncTestsResponseSuccess) AllValues() []SyncTestsResponseSuccess {
+	return []SyncTestsResponseSuccess{
+		SyncTestsResponseSuccessTrue,
+	}
+}
+
+// Ref: #/components/schemas/TestCapabilityName
+type TestCapabilityName string
+
+const (
+	TestCapabilityNameAudioInput    TestCapabilityName = "audioInput"
+	TestCapabilityNameDynamicIsland TestCapabilityName = "dynamicIsland"
+	TestCapabilityNamePhoneNumber   TestCapabilityName = "phoneNumber"
+)
+
+// AllValues returns all TestCapabilityName values.
+func (TestCapabilityName) AllValues() []TestCapabilityName {
+	return []TestCapabilityName{
+		TestCapabilityNameAudioInput,
+		TestCapabilityNameDynamicIsland,
+		TestCapabilityNamePhoneNumber,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s TestCapabilityName) MarshalText() ([]byte, error) {
+	switch s {
+	case TestCapabilityNameAudioInput:
+		return []byte(s), nil
+	case TestCapabilityNameDynamicIsland:
+		return []byte(s), nil
+	case TestCapabilityNamePhoneNumber:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *TestCapabilityName) UnmarshalText(data []byte) error {
+	switch TestCapabilityName(data) {
+	case TestCapabilityNameAudioInput:
+		*s = TestCapabilityNameAudioInput
+		return nil
+	case TestCapabilityNameDynamicIsland:
+		*s = TestCapabilityNameDynamicIsland
+		return nil
+	case TestCapabilityNamePhoneNumber:
+		*s = TestCapabilityNamePhoneNumber
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
 }

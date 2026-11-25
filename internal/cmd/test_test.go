@@ -86,7 +86,7 @@ func TestSyncTestsSendsFiles(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Errorf("could not decode request: %v", err)
 		}
-		jsonResponse(w, http.StatusOK, `{"success":true,"result":{"revision":3,"changes":[]}}`)
+		jsonResponse(w, http.StatusOK, `{"success":true,"revision":3,"changes":[]}`)
 	}))
 	defer srv.Close()
 
@@ -121,7 +121,7 @@ func TestSyncTestsEmptyDirectorySendsEmptyList(t *testing.T) {
 	var raw []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ = io.ReadAll(r.Body)
-		jsonResponse(w, http.StatusOK, `{"success":true,"result":{"revision":1,"changes":[]}}`)
+		jsonResponse(w, http.StatusOK, `{"success":true,"revision":1,"changes":[]}`)
 	}))
 	defer srv.Close()
 
@@ -139,7 +139,7 @@ func TestSyncTestsSendsEmptyListsForLeftOutFields(t *testing.T) {
 	var raw []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ = io.ReadAll(r.Body)
-		jsonResponse(w, http.StatusOK, `{"success":true,"result":{"revision":1,"changes":[]}}`)
+		jsonResponse(w, http.StatusOK, `{"success":true,"revision":1,"changes":[]}`)
 	}))
 	defer srv.Close()
 
@@ -155,12 +155,12 @@ func TestSyncTestsSendsEmptyListsForLeftOutFields(t *testing.T) {
 
 func TestSyncTestsWritesChanges(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jsonResponse(w, http.StatusOK, `{"success":true,"result":{"revision":4,"changes":[
-			{"identifier":"checkout","action":"create"},
-			{"identifier":"sign-in","action":"update","fields":["description","disabledCapabilities"]},
-			{"identifier":"old","action":"archive"},
-			{"identifier":"other","action":"unchanged"}
-		]}}`)
+		jsonResponse(w, http.StatusOK, `{"success":true,"revision":4,"changes":[
+			{"identifier":"checkout","action":"create","testId":null},
+			{"identifier":"sign-in","action":"update","fields":["description","disabledCapabilities"],"testId":null},
+			{"identifier":"old","action":"archive","testId":null},
+			{"identifier":"other","action":"unchanged","testId":null}
+		]}`)
 	}))
 	defer srv.Close()
 
@@ -242,7 +242,7 @@ func TestSyncTestsErrors(t *testing.T) {
 		{
 			name:   "forbidden",
 			status: http.StatusForbidden,
-			body:   `{}`,
+			body:   `{"success":false,"errors":[{"code":403,"message":"App not found or access denied"}]}`,
 			wantIs: client.ErrForbidden,
 		},
 	}
@@ -270,7 +270,7 @@ func TestSyncTestsErrors(t *testing.T) {
 
 func TestSyncTestsUnreadableResponseMayHaveApplied(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jsonResponse(w, http.StatusOK, `{"success":true,"result":{"revision":4,"changes":[{"identifier":"checkout","action":"restore"}]}}`)
+		jsonResponse(w, http.StatusOK, `{"success":true,"revision":4,"changes":[{"identifier":"checkout","action":"restore","testId":null}]}`)
 	}))
 	defer srv.Close()
 
