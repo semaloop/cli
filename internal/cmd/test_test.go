@@ -166,7 +166,9 @@ func requestOptions(t *testing.T, raw string) string {
 	return string(got)
 }
 
-const emptyResult = `{"success":true,"result":{"revision":3,"changes":[]}}`
+var testApp = api.SyncTestsResponseApp{Name: "Sim Shop", BundleId: "com.example.simshop"}
+
+const emptyResult = `{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":3,"changes":[]}`
 
 func TestSyncSendsFiles(t *testing.T) {
 	srv := newSyncServer(t, ok(emptyResult))
@@ -214,12 +216,12 @@ func TestSyncSendsEmptyListsForLeftOutFields(t *testing.T) {
 	}
 }
 
-const mixedResult = `{"success":true,"result":{"revision":4,"dryRun":true,"changes":[
-	{"identifier":"old","action":"archive","name":"Old"},
-	{"identifier":"other","action":"unchanged"},
-	{"identifier":"sign-in","action":"update","fields":["description","disabledCapabilities"]},
-	{"identifier":"checkout","action":"create"}
-]}}`
+const mixedResult = `{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":4,"changes":[
+	{"identifier":"old","action":"archive","testId":null},
+	{"identifier":"other","action":"unchanged","testId":null},
+	{"identifier":"sign-in","action":"update","fields":["description","disabledCapabilities"],"testId":null},
+	{"identifier":"checkout","action":"create","testId":null}
+]}`
 
 func TestDiffWritesPlan(t *testing.T) {
 	srv := newSyncServer(t, ok(mixedResult))
@@ -232,7 +234,7 @@ func TestDiffWritesPlan(t *testing.T) {
 	if got, want := requestOptions(t, srv.requests[0]), `{"allowArchiveAll":true,"dryRun":true}`; got != want {
 		t.Errorf("got request options %s, want %s", got, want)
 	}
-	want := dir + " → the app for your API key\n\n" +
+	want := dir + " → Sim Shop (com.example.simshop)\n\n" +
 		"  + checkout   Checkout                             checkout.md\n" +
 		"  ~ sign-in    description, disabled_capabilities   " + filepath.Join("smoke", "sign-in.md") + "\n" +
 		"  - old        file removed, will be archived\n" +
@@ -245,14 +247,14 @@ func TestDiffWritesPlan(t *testing.T) {
 }
 
 func TestDiffWithoutChanges(t *testing.T) {
-	srv := newSyncServer(t, ok(`{"success":true,"result":{"revision":4,"changes":[{"identifier":"checkout","action":"unchanged"}]}}`))
+	srv := newSyncServer(t, ok(`{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":4,"changes":[{"identifier":"checkout","action":"unchanged","testId":null}]}`))
 	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
 
 	var out bytes.Buffer
 	if _, err := Diff(context.Background(), srv.client(dir), &out, DiffOptions{Hint: true}); err != nil {
 		t.Fatal(err)
 	}
-	if want := dir + " → the app for your API key\n\nNo changes, 1 unchanged.\n"; out.String() != want {
+	if want := dir + " → Sim Shop (com.example.simshop)\n\nNo changes, 1 unchanged.\n"; out.String() != want {
 		t.Errorf("got output:\n%s\nwant:\n%s", out.String(), want)
 	}
 }
@@ -269,6 +271,9 @@ func TestDiffWritesJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("output isn't JSON: %v\n%s", err, out.String())
 	}
+	if want := (jsonApp{"Sim Shop", "com.example.simshop"}); got.App != want {
+		t.Errorf("got app %+v, want %+v", got.App, want)
+	}
 	if got.Revision != 4 || got.Applied || got.ArchivesAll || len(got.Changes) != 4 || len(got.Warnings) != 0 {
 		t.Errorf("unexpected plan %+v", got)
 	}
@@ -280,18 +285,19 @@ func TestDiffWritesJSON(t *testing.T) {
 	}
 }
 
-func TestPlanWarnsAboutRenamesAndRedundantTakeOvers(t *testing.T) {
+func TestPlanWarnsAboutRedundantTakeOvers(t *testing.T) {
 	dir := "tests"
-	p := newPlan(dir, []testfile.Test{
+	p := newPlan(dir, testApp, []testfile.Test{
 		{Path: filepath.Join(dir, "sign-in.md"), Identifier: "sign-in", Name: "Sign in"},
 		{Path: filepath.Join(dir, "checkout.md"), Identifier: "checkout", Name: "Checkout"},
 	}, 1, false, []api.SyncTestChange{
-		{Identifier: "login", Action: api.SyncTestChangeActionArchive, Name: api.NewOptString("Sign in")},
+		{Identifier: "login", Action: api.SyncTestChangeActionArchive},
 		{Identifier: "sign-in", Action: api.SyncTestChangeActionCreate},
-		{Identifier: "checkout", Action: api.SyncTestChangeActionUnchanged, TakeOverRedundant: api.NewOptBool(true)},
+		{Identifier: "checkout", Action: api.SyncTestChangeActionUnchanged, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
 	})
+	// The API doesn't name archived tests, so there's no name to match a
+	// rename against.
 	want := []string{
-		"login looks renamed to sign-in. Changing a test's identifier creates a new test, so its history won't carry over.",
 		"checkout is already in code, so take_over_test_id can be removed from checkout.md.",
 	}
 	if got := p.Warnings(); !slices.Equal(got, want) {
@@ -316,20 +322,20 @@ func TestPlanArchivesAll(t *testing.T) {
 		{"one updated", []api.SyncTestChange{change(api.SyncTestChangeActionArchive), change(api.SyncTestChangeActionUpdate)}, false},
 		{"redundant take over", []api.SyncTestChange{
 			change(api.SyncTestChangeActionArchive),
-			{Identifier: "t", Action: api.SyncTestChangeActionTakeOver, TakeOverRedundant: api.NewOptBool(true)},
+			{Identifier: "t", Action: api.SyncTestChangeActionTakeOver, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
 		}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := newPlan(".", nil, 1, false, tt.changes).ArchivesAll(); got != tt.want {
+			if got := newPlan(".", testApp, nil, 1, false, tt.changes).ArchivesAll(); got != tt.want {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-const plannedCreate = `{"success":true,"result":{"revision":%d,"dryRun":true,"changes":[{"identifier":"checkout","action":"create"}]}}`
-const appliedCreate = `{"success":true,"result":{"revision":%d,"changes":[{"identifier":"checkout","action":"create"}]}}`
+const plannedCreate = `{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":%d,"changes":[{"identifier":"checkout","action":"create","testId":null}]}`
+const appliedCreate = `{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":%d,"changes":[{"identifier":"checkout","action":"create","testId":null}]}`
 
 func confirmOptions(answers string, prompt io.Writer) SyncOptions {
 	return SyncOptions{Confirm: true, In: strings.NewReader(answers), Prompt: prompt}
@@ -380,7 +386,7 @@ func TestSyncNotConfirmedChangesNothing(t *testing.T) {
 }
 
 func TestSyncWithoutChangesDoesntAsk(t *testing.T) {
-	srv := newSyncServer(t, ok(`{"success":true,"result":{"revision":7,"changes":[{"identifier":"checkout","action":"unchanged"}]}}`))
+	srv := newSyncServer(t, ok(`{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":7,"changes":[{"identifier":"checkout","action":"unchanged","testId":null}]}`))
 	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
 
 	var prompt bytes.Buffer
@@ -421,36 +427,85 @@ func TestSyncConflictPlansAgain(t *testing.T) {
 	}
 }
 
-const plannedArchiveAll = `{"success":true,"result":{"revision":7,"dryRun":true,"changes":[{"identifier":"a","action":"archive"},{"identifier":"b","action":"archive"}]}}`
+const plannedArchiveAll = `{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":7,"changes":[{"identifier":"a","action":"archive","testId":null},{"identifier":"b","action":"archive","testId":null}]}`
 
-func TestSyncArchiveAllNeedsTypedConfirmation(t *testing.T) {
-	t.Run("y isn't enough", func(t *testing.T) {
-		srv := newSyncServer(t, ok(plannedArchiveAll))
-		var out, prompt bytes.Buffer
-		_, err := Sync(context.Background(), srv.client(t.TempDir()), &out, confirmOptions("y\n", &prompt))
-		if !errors.Is(err, ErrCancelled) {
-			t.Errorf("expected ErrCancelled, got %v", err)
-		}
-		if len(srv.requests) != 1 {
-			t.Errorf("expected only the plan request, got %d", len(srv.requests))
-		}
-		if !strings.Contains(prompt.String(), `Type "archive all" to confirm`) {
-			t.Errorf("unexpected prompt %q", prompt.String())
-		}
-		if !strings.Contains(out.String(), "Warning: this archives every test in code.") {
-			t.Errorf("expected an archive-all warning, got:\n%s", out.String())
-		}
-	})
+func TestSyncArchiveAllNeedsTheAppName(t *testing.T) {
+	const appliedArchiveAll = `{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":8,"changes":[{"identifier":"a","action":"archive","testId":"t1"},{"identifier":"b","action":"archive","testId":"t2"}]}`
+
+	for _, answer := range []string{"y\n", "archive all\n", "sim shop\n", "Sim\n", "com.example.simshop\n", ""} {
+		t.Run(fmt.Sprintf("refuses %q", answer), func(t *testing.T) {
+			srv := newSyncServer(t, ok(plannedArchiveAll))
+			var out, prompt bytes.Buffer
+			_, err := Sync(context.Background(), srv.client(t.TempDir()), &out, confirmOptions(answer, &prompt))
+			if !errors.Is(err, ErrCancelled) {
+				t.Errorf("expected ErrCancelled, got %v", err)
+			}
+			if len(srv.requests) != 1 {
+				t.Errorf("expected only the plan request, got %d", len(srv.requests))
+			}
+			if want := "This archives every test in code for Sim Shop. Type the app's name to confirm: "; prompt.String() != want {
+				t.Errorf("got prompt %q, want %q", prompt.String(), want)
+			}
+			if !strings.Contains(out.String(), "Warning: this archives every test in code.") {
+				t.Errorf("expected an archive-all warning, got:\n%s", out.String())
+			}
+		})
+	}
 
 	t.Run("typed", func(t *testing.T) {
-		srv := newSyncServer(t, ok(plannedArchiveAll), ok(`{"success":true,"result":{"revision":8,"changes":[{"identifier":"a","action":"archive"},{"identifier":"b","action":"archive"}]}}`))
-		if _, err := Sync(context.Background(), srv.client(t.TempDir()), io.Discard, confirmOptions("archive all\n", io.Discard)); err != nil {
+		srv := newSyncServer(t, ok(plannedArchiveAll), ok(appliedArchiveAll))
+		if _, err := Sync(context.Background(), srv.client(t.TempDir()), io.Discard, confirmOptions("Sim Shop\n", io.Discard)); err != nil {
 			t.Fatal(err)
 		}
 		if got, want := requestOptions(t, srv.requests[1]), `{"allowArchiveAll":true,"baseRevision":7}`; got != want {
 			t.Errorf("got apply options %s, want %s", got, want)
 		}
 	})
+
+	t.Run("asks again after a conflict", func(t *testing.T) {
+		srv := newSyncServer(t,
+			ok(plannedArchiveAll),
+			syncResponse{http.StatusConflict, `{"success":false,"errors":[{"code":409,"message":"Plan again."}]}`},
+			ok(strings.Replace(plannedArchiveAll, `"revision":7`, `"revision":8`, 1)),
+			ok(appliedArchiveAll),
+		)
+		var prompt bytes.Buffer
+		if _, err := Sync(context.Background(), srv.client(t.TempDir()), io.Discard, confirmOptions("Sim Shop\nSim Shop\n", &prompt)); err != nil {
+			t.Fatal(err)
+		}
+		if n := strings.Count(prompt.String(), "Type the app's name"); n != 2 {
+			t.Errorf("expected to be asked twice, was asked %d times", n)
+		}
+		if got, want := requestOptions(t, srv.requests[3]), `{"allowArchiveAll":true,"baseRevision":8}`; got != want {
+			t.Errorf("got apply options %s, want %s", got, want)
+		}
+	})
+
+	t.Run("refuses when the app has no name", func(t *testing.T) {
+		srv := newSyncServer(t, ok(strings.Replace(plannedArchiveAll, `"name":"Sim Shop"`, `"name":" "`, 1)))
+		var prompt bytes.Buffer
+		_, err := Sync(context.Background(), srv.client(t.TempDir()), io.Discard, confirmOptions("\n \n", &prompt))
+		if !errors.Is(err, ErrUnnamedApp) {
+			t.Errorf("expected ErrUnnamedApp, got %v", err)
+		}
+		if prompt.Len() != 0 || len(srv.requests) != 1 {
+			t.Errorf("expected only the plan request and no prompt, got %d requests and prompt %q", len(srv.requests), prompt.String())
+		}
+	})
+}
+
+// An API that doesn't name the app can't be confirmed against, so the plan
+// fails before anything is asked or applied.
+func TestSyncWithoutAppIdentityAppliesNothing(t *testing.T) {
+	srv := newSyncServer(t, ok(`{"success":true,"revision":7,"changes":[{"identifier":"a","action":"archive","testId":"t1"}]}`))
+	var prompt bytes.Buffer
+	_, err := Sync(context.Background(), srv.client(t.TempDir()), io.Discard, confirmOptions("y\n", &prompt))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if prompt.Len() != 0 || len(srv.requests) != 1 {
+		t.Errorf("expected only the plan request and no prompt, got %d requests and prompt %q", len(srv.requests), prompt.String())
+	}
 }
 
 func TestSyncErrors(t *testing.T) {
@@ -489,7 +544,7 @@ func TestSyncErrors(t *testing.T) {
 		{
 			name:   "forbidden",
 			status: http.StatusForbidden,
-			body:   `{}`,
+			body:   `{"success":false,"errors":[{"code":403,"message":"App not found or access denied"}]}`,
 			wantIs: client.ErrForbidden,
 		},
 	}
@@ -512,7 +567,7 @@ func TestSyncErrors(t *testing.T) {
 }
 
 func TestSyncUnreadableResponseMayHaveApplied(t *testing.T) {
-	srv := newSyncServer(t, ok(`{"success":true,"result":{"revision":4,"changes":[{"identifier":"checkout","action":"restore"}]}}`))
+	srv := newSyncServer(t, ok(`{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":4,"changes":[{"identifier":"checkout","action":"restore","testId":null}]}`))
 	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
 	_, err := Sync(context.Background(), srv.client(dir), io.Discard, SyncOptions{})
 	if err == nil || !strings.Contains(err.Error(), "the sync may have been applied") {
@@ -566,13 +621,13 @@ func TestSyncConnectionError(t *testing.T) {
 
 func TestWriteTextShowsUnknownActions(t *testing.T) {
 	var out bytes.Buffer
-	newPlan(".", nil, 1, true, []api.SyncTestChange{
+	newPlan(".", testApp, []testfile.Test{{Path: "b.md", Identifier: "b", Name: "B"}}, 1, true, []api.SyncTestChange{
 		{Identifier: "a", Action: "restore"},
-		{Identifier: "b", Action: api.SyncTestChangeActionCreate, Name: api.NewOptString("B")},
+		{Identifier: "b", Action: api.SyncTestChangeActionCreate},
 		{Identifier: "c", Action: "soft_delete"},
 	}).WriteText(&out)
-	want := ". → the app for your API key\n\n" +
-		"  + b   B\n" +
+	want := ". → Sim Shop (com.example.simshop)\n\n" +
+		"  + b   B             b.md\n" +
 		"  ? a   restore\n" +
 		"  ? c   soft delete\n" +
 		"\n" +
