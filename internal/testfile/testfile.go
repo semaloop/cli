@@ -28,10 +28,20 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"go.yaml.in/yaml/v3"
 )
+
+// The API's limits, checked here so `test check` catches what a sync would
+// reject.
+const (
+	maxIdentifierLength = 128
+	maxFolderLength     = 40
+)
+
+var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // Limits on tags, matching the dashboard's.
 const (
@@ -261,6 +271,9 @@ func Parse(path string, data []byte) (Test, []Error) {
 		if s == "" && required {
 			fail(v.Line+offset, "%s must not be empty", key)
 		}
+		if strings.ContainsFunc(s, unicode.IsControl) {
+			fail(v.Line+offset, "%s must be on one line", key)
+		}
 		return s
 	}
 	// list returns the list's items and the line each one is on.
@@ -282,6 +295,10 @@ func Parse(path string, data []byte) (Test, []Error) {
 				fail(item.Line+offset, "each item in %s must be non-empty text", key)
 				continue
 			}
+			if strings.ContainsFunc(s, unicode.IsControl) {
+				fail(item.Line+offset, "each item in %s must be on one line", key)
+				continue
+			}
 			out = append(out, s)
 			lines = append(lines, item.Line+offset)
 		}
@@ -290,8 +307,18 @@ func Parse(path string, data []byte) (Test, []Error) {
 
 	t.Identifier = str("identifier", true)
 	t.identifierLine = seen["identifier"]
+	switch {
+	case t.Identifier == "" || strings.ContainsFunc(t.Identifier, unicode.IsControl):
+	case len(t.Identifier) > maxIdentifierLength:
+		fail(seen["identifier"], "identifier must be at most %d characters", maxIdentifierLength)
+	case !identifierPattern.MatchString(t.Identifier):
+		fail(seen["identifier"], "identifier must start with a letter or digit, then use only letters, digits, '.', '_' and '-'")
+	}
 	t.Name = str("name", true)
 	t.Folder = str("folder", false)
+	if utf8.RuneCountInString(t.Folder) > maxFolderLength {
+		fail(seen["folder"], "folder must be at most %d characters", maxFolderLength)
+	}
 	t.TakeOverTestID = str("take_over_test_id", false)
 
 	if v, ok := values["draft"]; ok && !isNull(v) {

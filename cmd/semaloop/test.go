@@ -159,13 +159,14 @@ func syncError(command string, err error) error {
 	}
 }
 
-// canAsk reports whether sync can ask before applying: it's run in a
-// terminal, and not in CI.
+// canAsk reports whether sync can ask before applying: a person can see the
+// question and answer it, and it's not run in CI. Stdout doesn't count, so
+// piping the results somewhere doesn't skip the question.
 func canAsk() bool {
 	if ci := os.Getenv("CI"); ci != "" && ci != "false" && ci != "0" {
 		return false
 	}
-	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
 }
 
 // TestPullCmd writes test files for the app's dashboard tests.
