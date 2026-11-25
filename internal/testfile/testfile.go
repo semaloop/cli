@@ -33,29 +33,6 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// DefaultDir is where test files live, relative to the repository root.
-const DefaultDir = ".semaloop/tests"
-
-// FindDir returns the default test directory for a command run from wd:
-// DefaultDir at the root of the Git repository containing wd, relative to wd
-// where possible. Outside a repository it returns DefaultDir, relative to wd.
-func FindDir(wd string) string {
-	for dir := wd; ; {
-		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-			path := filepath.Join(dir, DefaultDir)
-			if rel, err := filepath.Rel(wd, path); err == nil {
-				return rel
-			}
-			return path
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return DefaultDir
-		}
-		dir = parent
-	}
-}
-
 // Limits on tags, matching the dashboard's.
 const (
 	MaxTags      = 20

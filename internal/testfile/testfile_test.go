@@ -219,34 +219,6 @@ func TestParseErrors(t *testing.T) {
 	}
 }
 
-func TestFindDir(t *testing.T) {
-	root := t.TempDir()
-	sub := filepath.Join(root, "ios", "App")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// A stray test directory below the root must not be picked up.
-	if err := os.MkdirAll(filepath.Join(root, "ios", DefaultDir), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := FindDir(root); got != DefaultDir {
-		t.Errorf("from the root: got %q, want %q", got, DefaultDir)
-	}
-	if got, want := FindDir(sub), filepath.Join("..", "..", DefaultDir); got != want {
-		t.Errorf("from a subdirectory: got %q, want %q", got, want)
-	}
-}
-
-func TestFindDirOutsideRepository(t *testing.T) {
-	if got := FindDir(t.TempDir()); got != DefaultDir {
-		t.Errorf("got %q, want %q", got, DefaultDir)
-	}
-}
-
 func manyTags(n int) string {
 	tags := make([]string, n)
 	for i := range tags {

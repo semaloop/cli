@@ -84,7 +84,7 @@ Open the app and sign in with the test account. Check that the home screen shows
 - `semaloop test check` checks the files offline, without an API key, and reports every error with its file and line.
 - `semaloop test sync` checks the files, then creates, updates and archives tests in Semaloop to match them. Deleting a file archives its test. A sync that would archive every test in code is refused unless you pass `--allow-archive-all`.
 
-Both commands read `.semaloop/tests` at the root of your Git repository by default, wherever you run them from, or the directory you pass.
+Both commands read `.semaloop/tests` in the current directory by default, so run them from your repository root, or pass the directory of test files.
 
 ## GitHub Actions
 
