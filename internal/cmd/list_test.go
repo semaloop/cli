@@ -155,7 +155,7 @@ func TestPullWritesFilesThatSyncTakesOver(t *testing.T) {
 		}
 	}
 	in := syncInput(signIn)
-	if in.TakeOverTestId.Value != "t-sign-in" || !reflect.DeepEqual(in.DisabledCapabilities, []api.TestCapabilityName{api.TestCapabilityNameDynamicIsland}) {
+	if in.TakeOverTestId.Value != "t-sign-in" || !reflect.DeepEqual(in.DisabledCapabilities, []api.TestCapabilityName{"dynamicIsland"}) {
 		t.Errorf("unexpected sync input %+v", in)
 	}
 }
