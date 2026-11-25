@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/semaloop/cli/internal/testfile"
 )
@@ -17,9 +19,18 @@ func paths(files []PulledFile) []string {
 	return out
 }
 
+func mustPlan(t *testing.T, dir string, remote []DashboardTest, local []testfile.Test, opts PullOptions) PullPlan {
+	t.Helper()
+	plan, err := PlanPull(dir, remote, local, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return plan
+}
+
 func TestPlanPullWritesEverySetting(t *testing.T) {
 	dir := t.TempDir()
-	plan := PlanPull(dir, []DashboardTest{{
+	plan := mustPlan(t, dir, []DashboardTest{{
 		ID:                   "01JABC",
 		Name:                 "Sign in with email",
 		Description:          "Sign in.",
@@ -64,7 +75,7 @@ func TestPlanPullWritesEverySetting(t *testing.T) {
 
 // Secrets are written even when a test has none, so the file is exact.
 func TestPlanPullWritesEmptySecrets(t *testing.T) {
-	plan := PlanPull(t.TempDir(), []DashboardTest{{ID: "1", Name: "A", Description: "Do A."}}, nil, PullOptions{})
+	plan := mustPlan(t, t.TempDir(), []DashboardTest{{ID: "1", Name: "A", Description: "Do A."}}, nil, PullOptions{})
 	if s := plan.Files[0].Test.Secrets; s == nil || len(s) != 0 {
 		t.Errorf("expected empty secrets, got %#v", s)
 	}
@@ -85,7 +96,7 @@ func TestPlanPullMakesIdentifiersUnique(t *testing.T) {
 		{ID: "f", Name: "Sign in", ExternalID: "sign-in"},
 		{ID: "g", Name: "☕"},
 	}
-	got := paths(PlanPull(dir, remote, local, PullOptions{}).Files)
+	got := paths(mustPlan(t, dir, remote, local, PullOptions{}).Files)
 	want := []string{
 		filepath.Join(dir, "checkout-2.md"),
 		filepath.Join(dir, "checkout-4.md"),
@@ -102,15 +113,18 @@ func TestPlanPullMakesIdentifiersUnique(t *testing.T) {
 func TestPlanPullSkipsTestsWithAFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mine.md")
+	if err := os.WriteFile(path, []byte("---\nidentifier: my-checkout\nname: Checkout\ntake_over_test_id: a\n---\n\nOld spec.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	local := []testfile.Test{{Path: path, Identifier: "my-checkout", TakeOverTestID: "a"}}
 	remote := []DashboardTest{{ID: "a", Name: "Checkout", Description: "New spec."}}
 
-	plan := PlanPull(dir, remote, local, PullOptions{})
+	plan := mustPlan(t, dir, remote, local, PullOptions{})
 	if len(plan.Files) != 0 || len(plan.Skipped) != 1 {
 		t.Fatalf("expected the test to be skipped, got %+v", plan)
 	}
 
-	plan = PlanPull(dir, remote, local, PullOptions{Force: true})
+	plan = mustPlan(t, dir, remote, local, PullOptions{Force: true})
 	if len(plan.Files) != 1 {
 		t.Fatalf("expected one file, got %+v", plan)
 	}
@@ -127,10 +141,10 @@ func TestPlanPullFilters(t *testing.T) {
 		{ID: "b", Name: "B", Folder: "Checkout"},
 		{ID: "c", Name: "C"},
 	}
-	if got := paths(PlanPull(dir, remote, nil, PullOptions{Folders: []string{"Smoke"}}).Files); len(got) != 1 || filepath.Base(got[0]) != "a.md" {
+	if got := paths(mustPlan(t, dir, remote, nil, PullOptions{Folders: []string{"Smoke"}}).Files); len(got) != 1 || filepath.Base(got[0]) != "a.md" {
 		t.Errorf("folder filter: got %q", got)
 	}
-	if got := paths(PlanPull(dir, remote, nil, PullOptions{TestIDs: []string{"c", "b"}}).Files); len(got) != 2 {
+	if got := paths(mustPlan(t, dir, remote, nil, PullOptions{TestIDs: []string{"c", "b"}}).Files); len(got) != 2 {
 		t.Errorf("test filter: got %q", got)
 	}
 }
@@ -146,6 +160,125 @@ func TestWritePullNeverReplacesAnotherFile(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 	if data, _ := os.ReadFile(path); string(data) != "mine" {
+		t.Errorf("file was replaced: %q", data)
+	}
+}
+
+// A file where a folder's directory should be can't be avoided by another
+// file name, so planning fails instead of trying names forever.
+func TestPlanPullFileInTheWayOfFolder(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "smoke"), []byte("notes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := PlanPull(dir, []DashboardTest{{ID: "a", Name: "Checkout", Folder: "Smoke"}}, nil, PullOptions{})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("expected an error")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("PlanPull didn't return")
+	}
+}
+
+const pulledA = "---\nidentifier: a\nname: A\ntake_over_test_id: test-a\n---\n\nOld spec.\n"
+
+// forcePlan writes test-a's file at dir/a.md and plans refreshing it.
+func forcePlan(t *testing.T) (string, PullPlan) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.md")
+	if err := os.WriteFile(path, []byte(pulledA), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	local, errs, err := testfile.Load(dir)
+	if err != nil || len(errs) > 0 {
+		t.Fatal(err, errs)
+	}
+	plan := mustPlan(t, dir, []DashboardTest{{ID: "test-a", Name: "A", Description: "New spec."}}, local, PullOptions{Force: true})
+	if len(plan.Files) != 1 || !plan.Files[0].Replaces {
+		t.Fatalf("expected a.md to be replaced, got %+v", plan)
+	}
+	return path, plan
+}
+
+func TestWritePullForceReplacesTheTestsFile(t *testing.T) {
+	path, plan := forcePlan(t)
+	if err := WritePull(plan); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if test, errs := testfile.Parse(path, data); len(errs) > 0 || test.Description != "New spec." || test.TakeOverTestID != "test-a" {
+		t.Errorf("file wasn't refreshed: %q", data)
+	}
+}
+
+// A file that's changed since the pull was planned isn't replaced, even if
+// it's a valid test file.
+func TestWritePullForceRejectsChangedFile(t *testing.T) {
+	path, plan := forcePlan(t)
+	other := "---\nidentifier: b\nname: B\n---\n\nSomething else.\n"
+	if err := os.WriteFile(path, []byte(other), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePull(plan); !errors.Is(err, ErrPullConflict) {
+		t.Fatalf("expected a conflict, got %v", err)
+	}
+	if data, _ := os.ReadFile(path); string(data) != other {
+		t.Errorf("file was replaced: %q", data)
+	}
+}
+
+// A file swapped for a link isn't written through, even when the link's
+// target has the planned contents.
+func TestWritePullForceRejectsLink(t *testing.T) {
+	path, plan := forcePlan(t)
+	target := filepath.Join(t.TempDir(), "elsewhere.md")
+	if err := os.WriteFile(target, []byte(pulledA), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, path); err != nil {
+		t.Skip("can't make links:", err)
+	}
+	if err := WritePull(plan); !errors.Is(err, ErrPullConflict) {
+		t.Fatalf("expected a conflict, got %v", err)
+	}
+	if data, _ := os.ReadFile(target); string(data) != pulledA {
+		t.Errorf("link target was written: %q", data)
+	}
+}
+
+// A file that stops being the test's between loading and planning isn't
+// planned to be replaced.
+func TestPlanPullForceRejectsFileChangedSinceLoading(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.md")
+	local := []testfile.Test{{Path: path, Identifier: "a", TakeOverTestID: "test-a"}}
+	if err := os.WriteFile(path, []byte("---\nidentifier: b\nname: B\n---\n\nB.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PlanPull(dir, []DashboardTest{{ID: "test-a", Name: "A"}}, local, PullOptions{Force: true}); err == nil {
+		t.Error("expected an error")
+	}
+}
+
+// A replacement that wasn't planned by PlanPull has nothing to check the file
+// against, so it isn't written.
+func TestWritePullRejectsUnplannedReplace(t *testing.T) {
+	path, _ := forcePlan(t)
+	err := WritePull(PullPlan{Files: []PulledFile{{Path: path, Test: testfile.Test{Identifier: "a", Name: "A"}, Replaces: true}}})
+	if !errors.Is(err, ErrPullConflict) {
+		t.Fatalf("expected a conflict, got %v", err)
+	}
+	if data, _ := os.ReadFile(path); string(data) != pulledA {
 		t.Errorf("file was replaced: %q", data)
 	}
 }
