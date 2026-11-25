@@ -84,6 +84,8 @@ Open the app and sign in with the test account. Check that the home screen shows
 - `semaloop test check` checks the files offline, without an API key, and reports every error with its file and line.
 - `semaloop test diff` checks the files and shows what a sync would change, without changing anything. It warns when a test looks renamed, because changing a test's `identifier` loses its history.
 - `semaloop test sync` checks the files, then creates, updates and archives tests in Semaloop to match them. Deleting a file archives its test. In a terminal it shows the plan and asks before applying it, and applies exactly the plan you confirmed: if the app's tests change in the meantime, it shows the new plan and asks again. Pass `--yes` to skip the question. In CI it never asks. `semaloop test sync --dry-run` is the same as `semaloop test diff`.
+- `semaloop test pull` writes a file for each dashboard test that isn't in code yet, with every setting and a `take_over_test_id`, so the next sync moves the test into code and keeps its history. Running it again skips tests that already have a file, unless you pass `--force`. `--folder` and `--test` limit what it writes.
+- `semaloop test list` lists the app's tests. Filter with `--tag`, `--folder`, `--in-code` or `--in-dashboard`.
 
 A sync that would archive every test in code asks you to type the app's name in a terminal. Elsewhere it's refused unless you pass `--allow-archive-all`.
 
