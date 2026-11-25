@@ -16,6 +16,8 @@ type TestCmd struct {
 	Check TestCheckCmd `cmd:"" help:"Check test files offline and report every error."`
 	Diff  TestDiffCmd  `cmd:"" help:"Show what a sync would change, without changing anything."`
 	Sync  TestSyncCmd  `cmd:"" help:"Make Semaloop's tests in code match the test files."`
+	Pull  TestPullCmd  `cmd:"" help:"Write a test file for each dashboard test that isn't in code yet."`
+	List  TestListCmd  `cmd:"" help:"List the app's tests."`
 }
 
 // TestOutput is the --output flag of the test commands. Results go to
@@ -158,4 +160,84 @@ func canAsk() bool {
 		return false
 	}
 	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
+}
+
+// TestPullCmd writes test files for the app's dashboard tests.
+type TestPullCmd struct {
+	Path    string   `arg:"" default:".semaloop/tests" help:"Directory to write test files to, relative to the current directory (default: ${default})." completion-predictor:"dir"`
+	Force   bool     `help:"Rewrite the files of tests pulled before, if they haven't been edited since."`
+	Folders []string `name:"folder" help:"Only pull tests in this folder. Repeat for more than one."`
+	Tests   []string `name:"test" help:"Only pull the test with this Semaloop test ID. Repeat for more than one."`
+	TestOutput
+}
+
+func (c *TestPullCmd) Help() string {
+	return "Each file sets take_over_test_id, so the next `semaloop test sync` moves the test into code and keeps its history, instead of creating a new test."
+}
+
+func (c *TestPullCmd) Run(g *Globals) error {
+	if g.DryRun {
+		log.Info("Dry run: no tests fetched, no files written.", "dir", c.Path)
+		return nil
+	}
+	tests, err := fetchTests()
+	if err != nil {
+		return testsError("test pull", err)
+	}
+	_, err = icmd.Pull(c.Path, tests, os.Stdout, icmd.PullOptions{Force: c.Force, Folders: c.Folders, TestIDs: c.Tests}, c.json())
+	if err != nil {
+		return testsError("test pull", err)
+	}
+	return nil
+}
+
+// TestListCmd lists the app's tests.
+type TestListCmd struct {
+	Tags        []string `name:"tag" help:"Only list tests with this tag. Repeat for any of several."`
+	Folders     []string `name:"folder" help:"Only list tests in this folder. Repeat for any of several."`
+	InCode      bool     `name:"in-code" xor:"where" help:"Only list tests managed in code."`
+	InDashboard bool     `name:"in-dashboard" xor:"where" help:"Only list tests managed in the dashboard."`
+	TestOutput
+}
+
+func (c *TestListCmd) Run(g *Globals) error {
+	if g.DryRun {
+		log.Info("Dry run: no tests fetched.")
+		return nil
+	}
+	tests, err := fetchTests()
+	if err != nil {
+		return testsError("test list", err)
+	}
+	icmd.WriteTestList(os.Stdout, icmd.FilterTests(tests, icmd.ListFilter{
+		Tags:        c.Tags,
+		Folders:     c.Folders,
+		InCode:      c.InCode,
+		InDashboard: c.InDashboard,
+	}), c.json())
+	return nil
+}
+
+func fetchTests() ([]icmd.DashboardTest, error) {
+	apiKey, err := config.APIKey()
+	if err != nil {
+		return nil, fmt.Errorf("could not load configuration: %w", err)
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("not authenticated, run `semaloop auth login` first")
+	}
+	return icmd.FetchTests(context.Background(), apiKey, client.ServerURL())
+}
+
+func testsError(command string, err error) error {
+	switch {
+	case errors.Is(err, client.ErrUnauthorized):
+		return fmt.Errorf("invalid API key, run `semaloop auth login` to update it")
+	case errors.Is(err, client.ErrForbidden):
+		return fmt.Errorf("your account does not have permission to read tests")
+	case errors.Is(err, icmd.ErrInvalidTests):
+		return err
+	default:
+		return fmt.Errorf("%s failed: %w", command, err)
+	}
 }
