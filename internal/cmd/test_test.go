@@ -217,7 +217,7 @@ func TestSyncSendsEmptyListsForLeftOutFields(t *testing.T) {
 }
 
 const mixedResult = `{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":4,"changes":[
-	{"identifier":"old","action":"archive","testId":null},
+	{"identifier":"old","action":"archive","testId":"t-old","name":"Old"},
 	{"identifier":"other","action":"unchanged","testId":null},
 	{"identifier":"sign-in","action":"update","fields":["description","disabledCapabilities"],"testId":null},
 	{"identifier":"checkout","action":"create","testId":null}
@@ -285,19 +285,18 @@ func TestDiffWritesJSON(t *testing.T) {
 	}
 }
 
-func TestPlanWarnsAboutRedundantTakeOvers(t *testing.T) {
+func TestPlanWarnsAboutRenamesAndRedundantTakeOvers(t *testing.T) {
 	dir := "tests"
 	p := newPlan(dir, testApp, []testfile.Test{
 		{Path: filepath.Join(dir, "sign-in.md"), Identifier: "sign-in", Name: "Sign in"},
 		{Path: filepath.Join(dir, "checkout.md"), Identifier: "checkout", Name: "Checkout"},
 	}, 1, false, []api.SyncTestChange{
-		{Identifier: "login", Action: api.SyncTestChangeActionArchive},
+		{Identifier: "login", Action: api.SyncTestChangeActionArchive, Name: api.NewOptString("Sign in")},
 		{Identifier: "sign-in", Action: api.SyncTestChangeActionCreate},
 		{Identifier: "checkout", Action: api.SyncTestChangeActionUnchanged, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
 	})
-	// The API doesn't name archived tests, so there's no name to match a
-	// rename against.
 	want := []string{
+		"login looks renamed to sign-in. Changing a test's identifier creates a new test, so its history won't carry over.",
 		"checkout is already in code, so take_over_test_id can be removed from checkout.md.",
 	}
 	if got := p.Warnings(); !slices.Equal(got, want) {

@@ -2814,6 +2814,12 @@ func (s *SyncTestChange) encodeFields(e *jx.Encoder) {
 		e.Str(s.Identifier)
 	}
 	{
+		if s.Name.Set {
+			e.FieldStart("name")
+			s.Name.Encode(e)
+		}
+	}
+	{
 		if s.TakeOverRedundant.Set {
 			e.FieldStart("takeOverRedundant")
 			s.TakeOverRedundant.Encode(e)
@@ -2825,12 +2831,13 @@ func (s *SyncTestChange) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfSyncTestChange = [5]string{
+var jsonFieldsNameOfSyncTestChange = [6]string{
 	0: "action",
 	1: "fields",
 	2: "identifier",
-	3: "takeOverRedundant",
-	4: "testId",
+	3: "name",
+	4: "takeOverRedundant",
+	5: "testId",
 }
 
 // Decode decodes SyncTestChange from json.
@@ -2881,6 +2888,16 @@ func (s *SyncTestChange) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"identifier\"")
 			}
+		case "name":
+			if err := func() error {
+				s.Name.Reset()
+				if err := s.Name.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"name\"")
+			}
 		case "takeOverRedundant":
 			if err := func() error {
 				s.TakeOverRedundant.Reset()
@@ -2892,7 +2909,7 @@ func (s *SyncTestChange) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"takeOverRedundant\"")
 			}
 		case "testId":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				if err := s.TestId.Decode(d); err != nil {
 					return err
@@ -2911,7 +2928,7 @@ func (s *SyncTestChange) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00010101,
+		0b00100101,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

@@ -153,9 +153,12 @@ func (p *Plan) Warnings() []string {
 	return warnings
 }
 
-// name is the test's name, or empty when it has no file.
+// name is the test's name, from the file when there is one.
 func (p *Plan) name(ch api.SyncTestChange) string {
-	return p.tests[ch.Identifier].Name
+	if t, ok := p.tests[ch.Identifier]; ok {
+		return t.Name
+	}
+	return ch.Name.Value
 }
 
 // path is the test's file, relative to the plan's directory, or empty when
