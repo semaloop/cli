@@ -189,8 +189,20 @@ func errorMessages(errs []api.ErrorResponseErrorsItem) string {
 	return strings.Join(msgs, "; ")
 }
 
+// syncAction is what a sync does to one test. It's a plain string because
+// the API may add actions that this version of the CLI doesn't know.
+type syncAction = string
+
+const (
+	actionCreate    syncAction = "create"
+	actionUpdate    syncAction = "update"
+	actionTakeOver  syncAction = "take_over"
+	actionArchive   syncAction = "archive"
+	actionUnchanged syncAction = "unchanged"
+)
+
 type changeAction struct {
-	action api.SyncTestChangeAction
+	action syncAction
 	symbol string
 	label  string
 }
@@ -198,15 +210,15 @@ type changeAction struct {
 // actions lists the changes a sync can make, in the order totals are given,
 // with the symbol and label each is shown with.
 var actions = []changeAction{
-	{api.SyncTestChangeActionCreate, "+", "created"},
-	{api.SyncTestChangeActionUpdate, "~", "updated"},
-	{api.SyncTestChangeActionTakeOver, "~", "taken over"},
-	{api.SyncTestChangeActionArchive, "-", "archived"},
+	{actionCreate, "+", "created"},
+	{actionUpdate, "~", "updated"},
+	{actionTakeOver, "~", "taken over"},
+	{actionArchive, "-", "archived"},
 }
 
 // lookupAction returns how to show action. An action this version of the CLI
 // doesn't know is shown by its name, so no change goes unreported.
-func lookupAction(action api.SyncTestChangeAction) changeAction {
+func lookupAction(action syncAction) changeAction {
 	if i := slices.IndexFunc(actions, func(a changeAction) bool { return a.action == action }); i >= 0 {
 		return actions[i]
 	}
@@ -223,10 +235,10 @@ func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []ap
 		}
 	}
 
-	counts := map[api.SyncTestChangeAction]int{}
+	counts := map[syncAction]int{}
 	for _, ch := range changes {
 		counts[ch.Action]++
-		if ch.Action == api.SyncTestChangeActionUnchanged {
+		if ch.Action == actionUnchanged {
 			continue
 		}
 		a := lookupAction(ch.Action)
@@ -253,8 +265,8 @@ func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []ap
 		delete(counts, a.action)
 	}
 	// Actions this version of the CLI doesn't know, in a stable order.
-	unchanged := counts[api.SyncTestChangeActionUnchanged]
-	delete(counts, api.SyncTestChangeActionUnchanged)
+	unchanged := counts[actionUnchanged]
+	delete(counts, actionUnchanged)
 	for _, action := range slices.Sorted(maps.Keys(counts)) {
 		totals = append(totals, fmt.Sprintf("%d %s", counts[action], lookupAction(action).label))
 	}

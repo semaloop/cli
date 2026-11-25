@@ -274,9 +274,33 @@ func TestSyncTestsErrors(t *testing.T) {
 	}
 }
 
+// A newer API can send actions and fields this version of the CLI doesn't
+// know. They're shown by name rather than failing the sync.
+func TestSyncTestsShowsUnknownActionsAndFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, http.StatusOK, `{"success":true,"revision":4,"changes":[
+			{"identifier":"checkout","action":"restore","testId":"t1"},
+			{"identifier":"sign-in","action":"update","fields":["description","schedule"],"testId":"t2"}
+		]}`)
+	}))
+	defer srv.Close()
+
+	dir := writeTestFiles(t, map[string]string{"smoke/sign-in.md": signInFile, "checkout.md": checkoutFile})
+	var out bytes.Buffer
+	if _, err := SyncTests(context.Background(), "key", srv.URL, dir, &out, SyncOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	want := "  ? checkout  restore  checkout.md\n" +
+		"  ~ sign-in  updated: description, schedule  " + filepath.Join("smoke", "sign-in.md") + "\n" +
+		"1 updated, 1 restore, 0 unchanged.\n"
+	if out.String() != want {
+		t.Errorf("got output:\n%s\nwant:\n%s", out.String(), want)
+	}
+}
+
 func TestSyncTestsUnreadableResponseMayHaveApplied(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jsonResponse(w, http.StatusOK, `{"success":true,"revision":4,"changes":[{"identifier":"checkout","action":"restore","testId":null}]}`)
+		jsonResponse(w, http.StatusOK, `{"success":true,"revision":4,"changes":[{"identifier":"checkout"`)
 	}))
 	defer srv.Close()
 
@@ -302,7 +326,7 @@ func TestWriteChangesShowsUnknownActions(t *testing.T) {
 	var out bytes.Buffer
 	writeChanges(&out, ".", nil, []api.SyncTestChange{
 		{Identifier: "a", Action: "restore"},
-		{Identifier: "b", Action: api.SyncTestChangeActionCreate},
+		{Identifier: "b", Action: actionCreate},
 		{Identifier: "c", Action: "soft_delete"},
 	})
 	want := "  ? a  restore\n" +
