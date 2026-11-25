@@ -30,6 +30,10 @@ var ErrConflict = errors.New("sync conflict")
 // ErrCancelled is returned when a sync isn't confirmed.
 var ErrCancelled = errors.New("sync cancelled, nothing was changed")
 
+// ErrUnnamedApp is returned when a plan archives every test in code but the
+// API didn't name the app, so there's nothing to ask a person to type.
+var ErrUnnamedApp = errors.New("can't confirm archiving every test in code: Semaloop didn't name the app for your API key, so nothing was changed")
+
 // CheckTests loads the test files under dir and writes every error to out.
 // As text, that's one per line as `file:line: message`. As JSON, it's an
 // object with the number of valid tests and the errors. It returns
@@ -134,8 +138,8 @@ func (s *SyncClient) Apply(ctx context.Context, opts ApplyOptions) (*Plan, error
 }
 
 func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.OptInt, allowArchiveAll bool) (*Plan, error) {
-	req := &api.SyncTestsRequest{
-		Tests:           make([]api.SyncTestInput, 0, len(s.tests)),
+	req := api.PostSyncTestsReq{
+		Tests:           make([]api.ManagedTestInput, 0, len(s.tests)),
 		AllowArchiveAll: api.NewOptBool(allowArchiveAll),
 		BaseRevision:    baseRevision,
 	}
@@ -153,7 +157,7 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 		WroteHeaders: func() { sent.Store(true) },
 	})
 
-	res, err := s.api.PostSyncTests(ctx, req)
+	res, err := s.api.PostSyncTests(ctx, api.NewOptPostSyncTestsReq(req))
 	if err != nil {
 		switch code := statusCode(err); {
 		case code == http.StatusForbidden:
@@ -177,10 +181,12 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 	}
 
 	switch r := res.(type) {
-	case *api.PostSyncTestsOK:
-		return newPlan(s.dir, s.tests, r.Result.Revision, !dryRun, r.Result.Changes), nil
+	case *api.SyncTestsResponse:
+		return newPlan(s.dir, r.App, s.tests, r.Revision, !dryRun, r.Changes), nil
 	case *api.PostSyncTestsBadRequest:
 		return nil, fmt.Errorf("sync rejected: %s", errorMessages(r.Errors))
+	case *api.PostSyncTestsForbidden:
+		return nil, client.ErrForbidden
 	case *api.PostSyncTestsConflict:
 		return nil, fmt.Errorf("%w: %s", ErrConflict, errorMessages(r.Errors))
 	case *api.PostSyncTestsUnauthorized:
@@ -191,8 +197,8 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 }
 
 // syncInput maps a test file to the sync request's fields.
-func syncInput(t testfile.Test) api.SyncTestInput {
-	in := api.SyncTestInput{
+func syncInput(t testfile.Test) api.ManagedTestInput {
+	in := api.ManagedTestInput{
 		Identifier:  t.Identifier,
 		Name:        t.Name,
 		Description: t.Description,
@@ -201,10 +207,10 @@ func syncInput(t testfile.Test) api.SyncTestInput {
 		// a missing field differently from an empty one.
 		Tags:                 orEmpty(t.Tags),
 		Secrets:              t.Secrets,
-		DisabledCapabilities: orEmpty(t.DisabledCapabilities),
+		DisabledCapabilities: capabilities(t.DisabledCapabilities),
 	}
 	if t.Folder != "" {
-		in.Folder = api.NewOptString(t.Folder)
+		in.Folder = api.NewOptNilString(t.Folder)
 	}
 	if t.Draft != nil {
 		in.Draft = api.NewOptBool(*t.Draft)
@@ -220,6 +226,14 @@ func orEmpty(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+func capabilities(names []string) []api.TestCapabilityName {
+	caps := make([]api.TestCapabilityName, len(names))
+	for i, n := range names {
+		caps[i] = api.TestCapabilityName(n)
+	}
+	return caps
 }
 
 func errorMessages(errs []api.ErrorResponseErrorsItem) string {
@@ -302,7 +316,11 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 
 		allowArchiveAll := opts.AllowArchiveAll
 		if plan.ArchivesAll() {
-			if !confirmArchiveAll(in, opts.Prompt) {
+			appName := strings.TrimSpace(plan.App.Name)
+			if appName == "" {
+				return nil, ErrUnnamedApp
+			}
+			if !confirmArchiveAll(in, opts.Prompt, appName) {
 				return nil, ErrCancelled
 			}
 			allowArchiveAll = true
@@ -327,21 +345,17 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 	}
 }
 
-// archiveAllPhrase is what a person types to confirm archiving every test in
-// code.
-//
-// TODO: ask for the app's name instead, once the sync response includes it.
-const archiveAllPhrase = "archive all"
-
 func confirm(in *bufio.Reader, prompt io.Writer) bool {
 	fmt.Fprint(prompt, "Apply these changes? [y/N] ")
 	answer := strings.ToLower(readLine(in))
 	return answer == "y" || answer == "yes"
 }
 
-func confirmArchiveAll(in *bufio.Reader, prompt io.Writer) bool {
-	fmt.Fprintf(prompt, "This archives every test in code. Type %q to confirm: ", archiveAllPhrase)
-	return readLine(in) == archiveAllPhrase
+// confirmArchiveAll asks for the app's name, exactly, so archiving a whole
+// suite can't be confirmed by habit or against the wrong app.
+func confirmArchiveAll(in *bufio.Reader, prompt io.Writer, appName string) bool {
+	fmt.Fprintf(prompt, "This archives every test in code for %s. Type the app's name to confirm: ", appName)
+	return readLine(in) == appName
 }
 
 // readLine reads one answer. An error, such as the end of the input, reads as

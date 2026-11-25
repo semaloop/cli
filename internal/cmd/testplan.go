@@ -14,14 +14,11 @@ import (
 	"github.com/semaloop/cli/internal/testfile"
 )
 
-// appLabel names the app a plan is for.
-//
-// TODO: name the app and its bundle id, once the sync response includes them.
-const appLabel = "the app for your API key"
-
 // Plan is what a sync would change, or, once applied, what it changed.
 type Plan struct {
-	Dir      string
+	Dir string
+	// App is the app the API key belongs to, whose tests the plan changes.
+	App      api.SyncTestsResponseApp
 	Revision int
 	// Applied is true when the changes have been made.
 	Applied bool
@@ -32,9 +29,10 @@ type Plan struct {
 	tests map[string]testfile.Test
 }
 
-func newPlan(dir string, tests []testfile.Test, revision int, applied bool, changes []api.SyncTestChange) *Plan {
+func newPlan(dir string, app api.SyncTestsResponseApp, tests []testfile.Test, revision int, applied bool, changes []api.SyncTestChange) *Plan {
 	p := &Plan{
 		Dir:      dir,
+		App:      app,
 		Revision: revision,
 		Applied:  applied,
 		Changes:  slices.Clone(changes),
@@ -155,12 +153,9 @@ func (p *Plan) Warnings() []string {
 	return warnings
 }
 
-// name is the test's name, from the file when there is one.
+// name is the test's name, or empty when it has no file.
 func (p *Plan) name(ch api.SyncTestChange) string {
-	if t, ok := p.tests[ch.Identifier]; ok {
-		return t.Name
-	}
-	return ch.Name.Value
+	return p.tests[ch.Identifier].Name
 }
 
 // path is the test's file, relative to the plan's directory, or empty when
@@ -179,7 +174,7 @@ func (p *Plan) path(ch api.SyncTestChange) string {
 func (p *Plan) detail(ch api.SyncTestChange) string {
 	fields := make([]string, len(ch.Fields))
 	for i, f := range ch.Fields {
-		fields[i] = snakeCase(f)
+		fields[i] = snakeCase(string(f))
 	}
 	switch ch.Action {
 	case api.SyncTestChangeActionCreate:
@@ -209,7 +204,7 @@ func (p *Plan) detail(ch api.SyncTestChange) string {
 // WriteText writes the plan for a person to read: the directory and app, one
 // line per changed test, any warnings, then totals.
 func (p *Plan) WriteText(out io.Writer) {
-	fmt.Fprintf(out, "%s → %s\n\n", p.Dir, appLabel)
+	fmt.Fprintf(out, "%s → %s (%s)\n\n", p.Dir, p.App.Name, p.App.BundleId)
 
 	if p.HasChanges() {
 		var b strings.Builder
@@ -281,8 +276,14 @@ type jsonChange struct {
 	TakeOverRedundant bool     `json:"takeOverRedundant,omitempty"`
 }
 
+type jsonApp struct {
+	Name     string `json:"name"`
+	BundleID string `json:"bundleId"`
+}
+
 type jsonPlan struct {
 	Dir         string         `json:"dir"`
+	App         jsonApp        `json:"app"`
 	Revision    int            `json:"revision"`
 	Applied     bool           `json:"applied"`
 	ArchivesAll bool           `json:"archivesAll"`
@@ -295,6 +296,7 @@ type jsonPlan struct {
 func (p *Plan) WriteJSON(out io.Writer) {
 	res := jsonPlan{
 		Dir:         p.Dir,
+		App:         jsonApp{p.App.Name, p.App.BundleId},
 		Revision:    p.Revision,
 		Applied:     p.Applied,
 		ArchivesAll: p.ArchivesAll(),
@@ -309,10 +311,10 @@ func (p *Plan) WriteJSON(out io.Writer) {
 			Name:              p.name(ch),
 			Path:              p.path(ch),
 			TestID:            ch.TestId.Value,
-			TakeOverRedundant: ch.TakeOverRedundant.Value,
+			TakeOverRedundant: bool(ch.TakeOverRedundant.Value),
 		}
 		for _, f := range ch.Fields {
-			c.Fields = append(c.Fields, snakeCase(f))
+			c.Fields = append(c.Fields, snakeCase(string(f)))
 		}
 		res.Changes = append(res.Changes, c)
 	}

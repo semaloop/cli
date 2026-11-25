@@ -19,6 +19,12 @@ func trimTrailingSlashes(u *url.URL) {
 
 // Invoker invokes operations described by OpenAPI v3 specification.
 type Invoker interface {
+	// GetListTests invokes get_ListTests operation.
+	//
+	// List the app's tests.
+	//
+	// GET /api/v1/tests
+	GetListTests(ctx context.Context) (GetListTestsRes, error)
 	// PostCreateUpload invokes post_CreateUpload operation.
 	//
 	// Create an iOS build or standalone Android APK upload.
@@ -33,10 +39,10 @@ type Invoker interface {
 	PostFinalizeUpload(ctx context.Context, request OptPostFinalizeUploadReq) (PostFinalizeUploadRes, error)
 	// PostSyncTests invokes post_SyncTests operation.
 	//
-	// Make the app's tests in code match the given set of tests, or plan the changes with dryRun.
+	// Sync the app's code-managed tests to a manifest.
 	//
 	// POST /api/v1/tests/sync
-	PostSyncTests(ctx context.Context, request *SyncTestsRequest) (PostSyncTestsRes, error)
+	PostSyncTests(ctx context.Context, request OptPostSyncTestsReq) (PostSyncTestsRes, error)
 }
 
 // Client implements OAS client.
@@ -76,6 +82,43 @@ func (c *Client) requestURL(ctx context.Context) *url.URL {
 		return c.serverURL
 	}
 	return u
+}
+
+// GetListTests invokes get_ListTests operation.
+//
+// List the app's tests.
+//
+// GET /api/v1/tests
+func (c *Client) GetListTests(ctx context.Context) (GetListTestsRes, error) {
+	res, err := c.sendGetListTests(ctx)
+	return res, err
+}
+
+func (c *Client) sendGetListTests(ctx context.Context) (res GetListTestsRes, err error) {
+
+	u := uri.Clone(c.requestURL(ctx))
+	var pathParts [1]string
+	pathParts[0] = "/api/v1/tests"
+	uri.AddPathParts(u, pathParts[:]...)
+
+	r, err := ht.NewRequest(ctx, "GET", u)
+	if err != nil {
+		return res, errors.Wrap(err, "create request")
+	}
+
+	resp, err := c.cfg.Client.Do(r)
+	if err != nil {
+		return res, errors.Wrap(err, "do request")
+	}
+	body := resp.Body
+	defer body.Close()
+
+	result, err := decodeGetListTestsResponse(resp)
+	if err != nil {
+		return res, errors.Wrap(err, "decode response")
+	}
+
+	return result, nil
 }
 
 // PostCreateUpload invokes post_CreateUpload operation.
@@ -157,15 +200,15 @@ func (c *Client) sendPostFinalizeUpload(ctx context.Context, request OptPostFina
 
 // PostSyncTests invokes post_SyncTests operation.
 //
-// Make the app's tests in code match the given set of tests, or plan the changes with dryRun.
+// Sync the app's code-managed tests to a manifest.
 //
 // POST /api/v1/tests/sync
-func (c *Client) PostSyncTests(ctx context.Context, request *SyncTestsRequest) (PostSyncTestsRes, error) {
+func (c *Client) PostSyncTests(ctx context.Context, request OptPostSyncTestsReq) (PostSyncTestsRes, error) {
 	res, err := c.sendPostSyncTests(ctx, request)
 	return res, err
 }
 
-func (c *Client) sendPostSyncTests(ctx context.Context, request *SyncTestsRequest) (res PostSyncTestsRes, err error) {
+func (c *Client) sendPostSyncTests(ctx context.Context, request OptPostSyncTestsReq) (res PostSyncTestsRes, err error) {
 
 	u := uri.Clone(c.requestURL(ctx))
 	var pathParts [1]string
