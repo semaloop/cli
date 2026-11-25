@@ -291,9 +291,9 @@ func TestPlanWarnsAboutRenamesAndRedundantTakeOvers(t *testing.T) {
 		{Path: filepath.Join(dir, "sign-in.md"), Identifier: "sign-in", Name: "Sign in"},
 		{Path: filepath.Join(dir, "checkout.md"), Identifier: "checkout", Name: "Checkout"},
 	}, 1, false, []api.SyncTestChange{
-		{Identifier: "login", Action: api.SyncTestChangeActionArchive, Name: api.NewOptString("Sign in")},
-		{Identifier: "sign-in", Action: api.SyncTestChangeActionCreate},
-		{Identifier: "checkout", Action: api.SyncTestChangeActionUnchanged, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
+		{Identifier: "login", Action: actionArchive, Name: api.NewOptString("Sign in")},
+		{Identifier: "sign-in", Action: actionCreate},
+		{Identifier: "checkout", Action: actionUnchanged, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
 	})
 	want := []string{
 		"login looks renamed to sign-in. Changing a test's identifier creates a new test, so its history won't carry over.",
@@ -305,7 +305,7 @@ func TestPlanWarnsAboutRenamesAndRedundantTakeOvers(t *testing.T) {
 }
 
 func TestPlanArchivesAll(t *testing.T) {
-	change := func(action api.SyncTestChangeAction) api.SyncTestChange {
+	change := func(action syncAction) api.SyncTestChange {
 		return api.SyncTestChange{Identifier: string(action), Action: action}
 	}
 	tests := []struct {
@@ -314,14 +314,14 @@ func TestPlanArchivesAll(t *testing.T) {
 		want    bool
 	}{
 		{"nothing in code", nil, false},
-		{"only creates", []api.SyncTestChange{change(api.SyncTestChangeActionCreate)}, false},
-		{"archives all", []api.SyncTestChange{change(api.SyncTestChangeActionArchive), change(api.SyncTestChangeActionArchive)}, true},
-		{"archives all and creates", []api.SyncTestChange{change(api.SyncTestChangeActionArchive), change(api.SyncTestChangeActionCreate)}, true},
-		{"one stays", []api.SyncTestChange{change(api.SyncTestChangeActionArchive), change(api.SyncTestChangeActionUnchanged)}, false},
-		{"one updated", []api.SyncTestChange{change(api.SyncTestChangeActionArchive), change(api.SyncTestChangeActionUpdate)}, false},
+		{"only creates", []api.SyncTestChange{change(actionCreate)}, false},
+		{"archives all", []api.SyncTestChange{change(actionArchive), change(actionArchive)}, true},
+		{"archives all and creates", []api.SyncTestChange{change(actionArchive), change(actionCreate)}, true},
+		{"one stays", []api.SyncTestChange{change(actionArchive), change(actionUnchanged)}, false},
+		{"one updated", []api.SyncTestChange{change(actionArchive), change(actionUpdate)}, false},
 		{"redundant take over", []api.SyncTestChange{
-			change(api.SyncTestChangeActionArchive),
-			{Identifier: "t", Action: api.SyncTestChangeActionTakeOver, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
+			change(actionArchive),
+			{Identifier: "t", Action: actionTakeOver, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
 		}, false},
 	}
 	for _, tt := range tests {
@@ -571,8 +571,28 @@ func TestSyncErrors(t *testing.T) {
 	}
 }
 
+// A newer API can send actions and fields this version of the CLI doesn't
+// know. They're shown by name rather than failing the plan.
+func TestDiffShowsUnknownActionsAndFields(t *testing.T) {
+	srv := newSyncServer(t, ok(`{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":4,"changes":[
+		{"identifier":"checkout","action":"restore","testId":"t1"},
+		{"identifier":"sign-in","action":"update","fields":["schedule"],"testId":"t2"}
+	]}`))
+	dir := writeTestFiles(t, map[string]string{"smoke/sign-in.md": signInFile, "checkout.md": checkoutFile})
+
+	var out bytes.Buffer
+	if _, err := Diff(context.Background(), srv.client(dir), &out, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"? checkout", "restore", "~ sign-in", "schedule", "1 to update, 1 restore, 0 unchanged."} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("expected %q in:\n%s", want, out.String())
+		}
+	}
+}
+
 func TestSyncUnreadableResponseMayHaveApplied(t *testing.T) {
-	srv := newSyncServer(t, ok(`{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":4,"changes":[{"identifier":"checkout","action":"restore","testId":null}]}`))
+	srv := newSyncServer(t, ok(`{"success":true,"revision":4,"changes":[{"identifier":"checkout"`))
 	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
 	_, err := Sync(context.Background(), srv.client(dir), io.Discard, SyncOptions{})
 	if err == nil || !strings.Contains(err.Error(), "the sync may have been applied") {
@@ -628,7 +648,7 @@ func TestWriteTextShowsUnknownActions(t *testing.T) {
 	var out bytes.Buffer
 	newPlan(".", testApp, []testfile.Test{{Path: "b.md", Identifier: "b", Name: "B"}}, 1, true, []api.SyncTestChange{
 		{Identifier: "a", Action: "restore"},
-		{Identifier: "b", Action: api.SyncTestChangeActionCreate},
+		{Identifier: "b", Action: actionCreate},
 		{Identifier: "c", Action: "soft_delete"},
 	}).WriteText(&out)
 	want := ". → Sim Shop (com.example.simshop)\n\n" +
