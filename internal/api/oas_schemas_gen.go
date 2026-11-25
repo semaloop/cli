@@ -2,10 +2,6 @@
 
 package api
 
-import (
-	"github.com/go-faster/errors"
-)
-
 // Ref: #/components/schemas/CreateUploadResponse
 type CreateUploadResponse struct {
 	// Server-generated upload identifier.
@@ -1172,8 +1168,8 @@ func (*PostSyncTestsUnauthorized) postSyncTestsRes() {}
 
 // Ref: #/components/schemas/SyncTestChange
 type SyncTestChange struct {
-	Action SyncTestChangeAction       `json:"action"`
-	Fields []SyncTestChangeFieldsItem `json:"fields"`
+	Action string   `json:"action"`
+	Fields []string `json:"fields"`
 	// The test's identifier in code.
 	Identifier string `json:"identifier"`
 	// The test's name, for an archive, which has no file to read it from.
@@ -1185,12 +1181,12 @@ type SyncTestChange struct {
 }
 
 // GetAction returns the value of Action.
-func (s *SyncTestChange) GetAction() SyncTestChangeAction {
+func (s *SyncTestChange) GetAction() string {
 	return s.Action
 }
 
 // GetFields returns the value of Fields.
-func (s *SyncTestChange) GetFields() []SyncTestChangeFieldsItem {
+func (s *SyncTestChange) GetFields() []string {
 	return s.Fields
 }
 
@@ -1215,12 +1211,12 @@ func (s *SyncTestChange) GetTestId() NilString {
 }
 
 // SetAction sets the value of Action.
-func (s *SyncTestChange) SetAction(val SyncTestChangeAction) {
+func (s *SyncTestChange) SetAction(val string) {
 	s.Action = val
 }
 
 // SetFields sets the value of Fields.
-func (s *SyncTestChange) SetFields(val []SyncTestChangeFieldsItem) {
+func (s *SyncTestChange) SetFields(val []string) {
 	s.Fields = val
 }
 
@@ -1242,151 +1238,6 @@ func (s *SyncTestChange) SetTakeOverRedundant(val OptSyncTestChangeTakeOverRedun
 // SetTestId sets the value of TestId.
 func (s *SyncTestChange) SetTestId(val NilString) {
 	s.TestId = val
-}
-
-type SyncTestChangeAction string
-
-const (
-	SyncTestChangeActionCreate    SyncTestChangeAction = "create"
-	SyncTestChangeActionUpdate    SyncTestChangeAction = "update"
-	SyncTestChangeActionTakeOver  SyncTestChangeAction = "take_over"
-	SyncTestChangeActionArchive   SyncTestChangeAction = "archive"
-	SyncTestChangeActionUnchanged SyncTestChangeAction = "unchanged"
-)
-
-// AllValues returns all SyncTestChangeAction values.
-func (SyncTestChangeAction) AllValues() []SyncTestChangeAction {
-	return []SyncTestChangeAction{
-		SyncTestChangeActionCreate,
-		SyncTestChangeActionUpdate,
-		SyncTestChangeActionTakeOver,
-		SyncTestChangeActionArchive,
-		SyncTestChangeActionUnchanged,
-	}
-}
-
-// MarshalText implements encoding.TextMarshaler.
-func (s SyncTestChangeAction) MarshalText() ([]byte, error) {
-	switch s {
-	case SyncTestChangeActionCreate:
-		return []byte(s), nil
-	case SyncTestChangeActionUpdate:
-		return []byte(s), nil
-	case SyncTestChangeActionTakeOver:
-		return []byte(s), nil
-	case SyncTestChangeActionArchive:
-		return []byte(s), nil
-	case SyncTestChangeActionUnchanged:
-		return []byte(s), nil
-	default:
-		return nil, errors.Errorf("invalid value: %q", s)
-	}
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (s *SyncTestChangeAction) UnmarshalText(data []byte) error {
-	switch SyncTestChangeAction(data) {
-	case SyncTestChangeActionCreate:
-		*s = SyncTestChangeActionCreate
-		return nil
-	case SyncTestChangeActionUpdate:
-		*s = SyncTestChangeActionUpdate
-		return nil
-	case SyncTestChangeActionTakeOver:
-		*s = SyncTestChangeActionTakeOver
-		return nil
-	case SyncTestChangeActionArchive:
-		*s = SyncTestChangeActionArchive
-		return nil
-	case SyncTestChangeActionUnchanged:
-		*s = SyncTestChangeActionUnchanged
-		return nil
-	default:
-		return errors.Errorf("invalid value: %q", data)
-	}
-}
-
-type SyncTestChangeFieldsItem string
-
-const (
-	SyncTestChangeFieldsItemName                 SyncTestChangeFieldsItem = "name"
-	SyncTestChangeFieldsItemDescription          SyncTestChangeFieldsItem = "description"
-	SyncTestChangeFieldsItemFolder               SyncTestChangeFieldsItem = "folder"
-	SyncTestChangeFieldsItemDraft                SyncTestChangeFieldsItem = "draft"
-	SyncTestChangeFieldsItemRestored             SyncTestChangeFieldsItem = "restored"
-	SyncTestChangeFieldsItemTags                 SyncTestChangeFieldsItem = "tags"
-	SyncTestChangeFieldsItemSecrets              SyncTestChangeFieldsItem = "secrets"
-	SyncTestChangeFieldsItemDisabledCapabilities SyncTestChangeFieldsItem = "disabledCapabilities"
-)
-
-// AllValues returns all SyncTestChangeFieldsItem values.
-func (SyncTestChangeFieldsItem) AllValues() []SyncTestChangeFieldsItem {
-	return []SyncTestChangeFieldsItem{
-		SyncTestChangeFieldsItemName,
-		SyncTestChangeFieldsItemDescription,
-		SyncTestChangeFieldsItemFolder,
-		SyncTestChangeFieldsItemDraft,
-		SyncTestChangeFieldsItemRestored,
-		SyncTestChangeFieldsItemTags,
-		SyncTestChangeFieldsItemSecrets,
-		SyncTestChangeFieldsItemDisabledCapabilities,
-	}
-}
-
-// MarshalText implements encoding.TextMarshaler.
-func (s SyncTestChangeFieldsItem) MarshalText() ([]byte, error) {
-	switch s {
-	case SyncTestChangeFieldsItemName:
-		return []byte(s), nil
-	case SyncTestChangeFieldsItemDescription:
-		return []byte(s), nil
-	case SyncTestChangeFieldsItemFolder:
-		return []byte(s), nil
-	case SyncTestChangeFieldsItemDraft:
-		return []byte(s), nil
-	case SyncTestChangeFieldsItemRestored:
-		return []byte(s), nil
-	case SyncTestChangeFieldsItemTags:
-		return []byte(s), nil
-	case SyncTestChangeFieldsItemSecrets:
-		return []byte(s), nil
-	case SyncTestChangeFieldsItemDisabledCapabilities:
-		return []byte(s), nil
-	default:
-		return nil, errors.Errorf("invalid value: %q", s)
-	}
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (s *SyncTestChangeFieldsItem) UnmarshalText(data []byte) error {
-	switch SyncTestChangeFieldsItem(data) {
-	case SyncTestChangeFieldsItemName:
-		*s = SyncTestChangeFieldsItemName
-		return nil
-	case SyncTestChangeFieldsItemDescription:
-		*s = SyncTestChangeFieldsItemDescription
-		return nil
-	case SyncTestChangeFieldsItemFolder:
-		*s = SyncTestChangeFieldsItemFolder
-		return nil
-	case SyncTestChangeFieldsItemDraft:
-		*s = SyncTestChangeFieldsItemDraft
-		return nil
-	case SyncTestChangeFieldsItemRestored:
-		*s = SyncTestChangeFieldsItemRestored
-		return nil
-	case SyncTestChangeFieldsItemTags:
-		*s = SyncTestChangeFieldsItemTags
-		return nil
-	case SyncTestChangeFieldsItemSecrets:
-		*s = SyncTestChangeFieldsItemSecrets
-		return nil
-	case SyncTestChangeFieldsItemDisabledCapabilities:
-		*s = SyncTestChangeFieldsItemDisabledCapabilities
-		return nil
-	default:
-		return errors.Errorf("invalid value: %q", data)
-	}
 }
 
 // `takeOverTestId` names the test already in code under this identifier, so it can be removed.
@@ -1494,51 +1345,4 @@ func (SyncTestsResponseSuccess) AllValues() []SyncTestsResponseSuccess {
 	}
 }
 
-// Ref: #/components/schemas/TestCapabilityName
 type TestCapabilityName string
-
-const (
-	TestCapabilityNameAudioInput    TestCapabilityName = "audioInput"
-	TestCapabilityNameDynamicIsland TestCapabilityName = "dynamicIsland"
-	TestCapabilityNamePhoneNumber   TestCapabilityName = "phoneNumber"
-)
-
-// AllValues returns all TestCapabilityName values.
-func (TestCapabilityName) AllValues() []TestCapabilityName {
-	return []TestCapabilityName{
-		TestCapabilityNameAudioInput,
-		TestCapabilityNameDynamicIsland,
-		TestCapabilityNamePhoneNumber,
-	}
-}
-
-// MarshalText implements encoding.TextMarshaler.
-func (s TestCapabilityName) MarshalText() ([]byte, error) {
-	switch s {
-	case TestCapabilityNameAudioInput:
-		return []byte(s), nil
-	case TestCapabilityNameDynamicIsland:
-		return []byte(s), nil
-	case TestCapabilityNamePhoneNumber:
-		return []byte(s), nil
-	default:
-		return nil, errors.Errorf("invalid value: %q", s)
-	}
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (s *TestCapabilityName) UnmarshalText(data []byte) error {
-	switch TestCapabilityName(data) {
-	case TestCapabilityNameAudioInput:
-		*s = TestCapabilityNameAudioInput
-		return nil
-	case TestCapabilityNameDynamicIsland:
-		*s = TestCapabilityNameDynamicIsland
-		return nil
-	case TestCapabilityNamePhoneNumber:
-		*s = TestCapabilityNamePhoneNumber
-		return nil
-	default:
-		return errors.Errorf("invalid value: %q", data)
-	}
-}
