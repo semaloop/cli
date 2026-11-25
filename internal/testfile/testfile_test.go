@@ -199,6 +199,11 @@ func TestParseErrors(t *testing.T) {
 			want: []string{"t.md:4: tag \"xxxx"},
 		},
 		{
+			name: "tag errors at the item's line",
+			src:  "---\nidentifier: a\nname: A\ntags:\n  - smoke\n  - login\n  - smoke\n---\nDo it.\n",
+			want: []string{`t.md:7: tag "smoke" is listed more than once`},
+		},
+		{
 			name: "too many tags",
 			src:  "---\nidentifier: a\nname: A\ntags: [" + manyTags(MaxTags+1) + "]\n---\nDo it.\n",
 			want: []string{"t.md:4: a test can have at most 20 tags, but this one has 21"},
@@ -312,5 +317,36 @@ func write(t *testing.T, dir, name, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadThroughSymlinkedDirectory(t *testing.T) {
+	real := t.TempDir()
+	write(t, real, "a.md", "---\nidentifier: a\nname: A\n---\nDo A.\n")
+	dir := filepath.Join(t.TempDir(), "tests")
+	if err := os.Symlink(real, dir); err != nil {
+		t.Skip(err)
+	}
+
+	tests, errs, err := Load(dir)
+	if err != nil || len(errs) > 0 {
+		t.Fatalf("unexpected errors: %v %v", err, errs)
+	}
+	if len(tests) != 1 || tests[0].Path != filepath.Join(dir, "a.md") {
+		t.Errorf("expected a.md under %s, got %+v", dir, tests)
+	}
+}
+
+func TestLoadRejectsSymlinkedSubdirectory(t *testing.T) {
+	shared := t.TempDir()
+	write(t, shared, "a.md", "---\nidentifier: a\nname: A\n---\nDo A.\n")
+	dir := t.TempDir()
+	if err := os.Symlink(shared, filepath.Join(dir, "shared")); err != nil {
+		t.Skip(err)
+	}
+
+	_, _, err := Load(dir)
+	if err == nil || !strings.Contains(err.Error(), "is a symlink to a directory") {
+		t.Errorf("expected a symlink error, got %v", err)
 	}
 }

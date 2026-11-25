@@ -110,11 +110,21 @@ func Load(dir string) ([]Test, []Error, error) {
 	// reported alongside them rather than after they're fixed.
 	var tests, parsed []Test
 	var errs []Error
-	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	// Walk through os.DirFS so that dir itself may be a symlink.
+	// filepath.WalkDir wouldn't descend into it.
+	err = fs.WalkDir(os.DirFS(dir), ".", func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".md") {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if d.Type()&fs.ModeSymlink != 0 {
+			// Symlinked directories aren't followed. Skipping one silently
+			// would let a sync archive every test inside it.
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				return fmt.Errorf("%s is a symlink to a directory, which isn't followed: move its test files into %s, or pass the directory it links to", path, dir)
+			}
+		}
+		if d.IsDir() || !strings.EqualFold(filepath.Ext(name), ".md") {
 			return nil
 		}
 		data, err := os.ReadFile(path)
@@ -253,16 +263,18 @@ func Parse(path string, data []byte) (Test, []Error) {
 		}
 		return s
 	}
-	list := func(key string) []string {
+	// list returns the list's items and the line each one is on.
+	list := func(key string) ([]string, []int) {
 		v, ok := values[key]
 		if !ok || isNull(v) {
-			return nil
+			return nil, nil
 		}
 		if v.Kind != yaml.SequenceNode {
 			fail(v.Line+offset, "%s must be a list, e.g. %s: [first, second]", key, key)
-			return nil
+			return nil, nil
 		}
 		out := make([]string, 0, len(v.Content))
+		lines := make([]int, 0, len(v.Content))
 		for _, item := range v.Content {
 			s, ok := scalarString(item)
 			s = strings.TrimSpace(s)
@@ -271,8 +283,9 @@ func Parse(path string, data []byte) (Test, []Error) {
 				continue
 			}
 			out = append(out, s)
+			lines = append(lines, item.Line+offset)
 		}
-		return out
+		return out, lines
 	}
 
 	t.Identifier = str("identifier", true)
@@ -290,10 +303,11 @@ func Parse(path string, data []byte) (Test, []Error) {
 		}
 	}
 
-	t.Tags = list("tags")
-	checkTags(t.Tags, seen["tags"], fail)
-	t.Secrets = list("secrets")
-	t.DisabledCapabilities = list("disabled_capabilities")
+	var tagLines []int
+	t.Tags, tagLines = list("tags")
+	checkTags(t.Tags, tagLines, seen["tags"], fail)
+	t.Secrets, _ = list("secrets")
+	t.DisabledCapabilities, _ = list("disabled_capabilities")
 
 	t.Description = strings.TrimSpace(strings.Join(lines[end+1:], "\n"))
 	if t.Description == "" {
@@ -304,9 +318,12 @@ func Parse(path string, data []byte) (Test, []Error) {
 	return t, errs
 }
 
-func checkTags(tags []string, line int, fail func(int, string, ...any)) {
+// checkTags reports each problem with a tag at that tag's line, from lines,
+// and too many tags at the tags key's line.
+func checkTags(tags []string, lines []int, keyLine int, fail func(int, string, ...any)) {
 	distinct := map[string]string{}
-	for _, tag := range tags {
+	for i, tag := range tags {
+		line := lines[i]
 		if utf8.RuneCountInString(tag) > MaxTagLength {
 			fail(line, "tag %q is longer than %d characters", tag, MaxTagLength)
 		}
@@ -322,7 +339,7 @@ func checkTags(tags []string, line int, fail func(int, string, ...any)) {
 		distinct[key] = tag
 	}
 	if len(distinct) > MaxTags {
-		fail(line, "a test can have at most %d tags, but this one has %d", MaxTags, len(distinct))
+		fail(keyLine, "a test can have at most %d tags, but this one has %d", MaxTags, len(distinct))
 	}
 }
 

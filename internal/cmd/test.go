@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -91,7 +93,13 @@ func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer
 			// doesn't expect, so this isn't a connection problem.
 			return SyncResult{}, fmt.Errorf("unexpected response from Semaloop: %d %s", code, http.StatusText(code))
 		}
-		return SyncResult{}, fmt.Errorf("could not connect to Semaloop: %w", err)
+		// net/http reports every transport failure as a *url.Error. Anything
+		// else happened after the server answered, so it may have applied
+		// the sync.
+		if urlErr := (*url.Error)(nil); errors.As(err, &urlErr) {
+			return SyncResult{}, fmt.Errorf("could not connect to Semaloop: %w", err)
+		}
+		return SyncResult{}, fmt.Errorf("could not read the response from Semaloop, so the sync may have been applied: %w", err)
 	}
 
 	switch r := res.(type) {
@@ -170,6 +178,15 @@ var actions = []changeAction{
 	{api.SyncTestChangeActionArchive, "-", "archived"},
 }
 
+// lookupAction returns how to show action. An action this version of the CLI
+// doesn't know is shown by its name, so no change goes unreported.
+func lookupAction(action api.SyncTestChangeAction) changeAction {
+	if i := slices.IndexFunc(actions, func(a changeAction) bool { return a.action == action }); i >= 0 {
+		return actions[i]
+	}
+	return changeAction{action, "?", strings.ReplaceAll(string(action), "_", " ")}
+}
+
 // writeChanges lists what changed, one test per line, followed by totals.
 // Unchanged tests are only counted.
 func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []api.SyncTestChange) {
@@ -183,11 +200,11 @@ func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []ap
 	counts := map[api.SyncTestChangeAction]int{}
 	for _, ch := range changes {
 		counts[ch.Action]++
-		i := slices.IndexFunc(actions, func(a changeAction) bool { return a.action == ch.Action })
-		if i < 0 {
+		if ch.Action == api.SyncTestChangeActionUnchanged {
 			continue
 		}
-		detail := actions[i].label
+		a := lookupAction(ch.Action)
+		detail := a.label
 		if len(ch.Fields) > 0 {
 			names := make([]string, len(ch.Fields))
 			for j, f := range ch.Fields {
@@ -195,7 +212,7 @@ func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []ap
 			}
 			detail += ": " + strings.Join(names, ", ")
 		}
-		line := fmt.Sprintf("  %s %s  %s", actions[i].symbol, ch.Identifier, detail)
+		line := fmt.Sprintf("  %s %s  %s", a.symbol, ch.Identifier, detail)
 		if p, ok := paths[ch.Identifier]; ok {
 			line += "  " + p
 		}
@@ -207,8 +224,15 @@ func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []ap
 		if n := counts[a.action]; n > 0 {
 			totals = append(totals, fmt.Sprintf("%d %s", n, a.label))
 		}
+		delete(counts, a.action)
 	}
-	totals = append(totals, fmt.Sprintf("%d unchanged", counts[api.SyncTestChangeActionUnchanged]))
+	// Actions this version of the CLI doesn't know, in a stable order.
+	unchanged := counts[api.SyncTestChangeActionUnchanged]
+	delete(counts, api.SyncTestChangeActionUnchanged)
+	for _, action := range slices.Sorted(maps.Keys(counts)) {
+		totals = append(totals, fmt.Sprintf("%d %s", counts[action], lookupAction(action).label))
+	}
+	totals = append(totals, fmt.Sprintf("%d unchanged", unchanged))
 	fmt.Fprintln(out, strings.Join(totals, ", ")+".")
 }
 

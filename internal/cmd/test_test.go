@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/semaloop/cli/internal/api"
 	"github.com/semaloop/cli/internal/client"
 )
 
@@ -264,5 +265,45 @@ func TestSyncTestsErrors(t *testing.T) {
 				t.Errorf("expected %q, got %q", tt.wantMsg, err)
 			}
 		})
+	}
+}
+
+func TestSyncTestsUnreadableResponseMayHaveApplied(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, http.StatusOK, `{"success":true,"result":{"revision":4,"changes":[{"identifier":"checkout","action":"restore"}]}}`)
+	}))
+	defer srv.Close()
+
+	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
+	_, err := SyncTests(context.Background(), "key", srv.URL, dir, io.Discard, SyncOptions{})
+	if err == nil || !strings.Contains(err.Error(), "the sync may have been applied") {
+		t.Errorf("expected a may-have-been-applied error, got %v", err)
+	}
+}
+
+func TestSyncTestsConnectionError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv.Close()
+
+	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
+	_, err := SyncTests(context.Background(), "key", srv.URL, dir, io.Discard, SyncOptions{})
+	if err == nil || !strings.HasPrefix(err.Error(), "could not connect to Semaloop") {
+		t.Errorf("expected a connection error, got %v", err)
+	}
+}
+
+func TestWriteChangesShowsUnknownActions(t *testing.T) {
+	var out bytes.Buffer
+	writeChanges(&out, ".", nil, []api.SyncTestChange{
+		{Identifier: "a", Action: "restore"},
+		{Identifier: "b", Action: api.SyncTestChangeActionCreate},
+		{Identifier: "c", Action: "soft_delete"},
+	})
+	want := "  ? a  restore\n" +
+		"  + b  created\n" +
+		"  ? c  soft delete\n" +
+		"1 created, 1 restore, 1 soft delete, 0 unchanged.\n"
+	if out.String() != want {
+		t.Errorf("got output:\n%s\nwant:\n%s", out.String(), want)
 	}
 }

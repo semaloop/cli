@@ -63,7 +63,7 @@ You can specify `--git-repo`, `--git-commit` and `--git-ref`, which allows Semal
 
 ### `semaloop test`
 
-Lets you keep your tests as Markdown files in your app's repository, one file per test in `.semaloop/tests` (subdirectories are fine). The frontmatter holds the test's settings and the body is the test, written in natural language:
+Lets you keep your tests as Markdown files in your app's repository, one file per test in `.semaloop/tests` (subdirectories are fine). Every `.md` file there is read as a test, so keep any notes about your tests in `.semaloop` instead. Symlinked directories inside it aren't followed. The frontmatter holds the test's settings and the body is the test, written in natural language:
 
 ```markdown
 ---
