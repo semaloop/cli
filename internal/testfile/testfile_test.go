@@ -113,6 +113,36 @@ func TestParseErrors(t *testing.T) {
 			want: []string{"t.md:1: frontmatter is never closed"},
 		},
 		{
+			name: "identifier with a space",
+			src:  "---\nidentifier: sign in\nname: A\n---\nDo it.\n",
+			want: []string{"t.md:2: identifier must start with a letter or digit"},
+		},
+		{
+			name: "identifier starting with a dash",
+			src:  "---\nidentifier: -a\nname: A\n---\nDo it.\n",
+			want: []string{"t.md:2: identifier must start with a letter or digit"},
+		},
+		{
+			name: "identifier too long",
+			src:  "---\nidentifier: " + strings.Repeat("a", 129) + "\nname: A\n---\nDo it.\n",
+			want: []string{"t.md:2: identifier must be at most 128 characters"},
+		},
+		{
+			name: "folder too long",
+			src:  "---\nidentifier: a\nname: A\nfolder: " + strings.Repeat("é", 41) + "\n---\nDo it.\n",
+			want: []string{"t.md:4: folder must be at most 40 characters"},
+		},
+		{
+			name: "name over two lines",
+			src:  "---\nidentifier: a\nname: \"A\\n::error::B\"\n---\nDo it.\n",
+			want: []string{"t.md:3: name must be on one line"},
+		},
+		{
+			name: "tag over two lines",
+			src:  "---\nidentifier: a\nname: A\ntags: [\"a\\nb\"]\n---\nDo it.\n",
+			want: []string{"t.md:4: each item in tags must be on one line"},
+		},
+		{
 			name: "duplicate tags",
 			src:  "---\nidentifier: a\nname: A\ntags: [smoke, smoke, Login, login]\n---\nDo it.\n",
 			want: []string{

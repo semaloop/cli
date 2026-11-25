@@ -234,10 +234,16 @@ func TestSyncTestsErrors(t *testing.T) {
 			wantIs: client.ErrUnauthorized,
 		},
 		{
-			name:    "unexpected status",
+			name:    "server error",
 			status:  http.StatusInternalServerError,
 			body:    `{}`,
-			wantMsg: "unexpected response from Semaloop: 500 Internal Server Error",
+			wantMsg: "unexpected response from Semaloop: 500 Internal Server Error, so the sync may have been applied",
+		},
+		{
+			name:    "unexpected status",
+			status:  http.StatusTeapot,
+			body:    `{}`,
+			wantMsg: "unexpected response from Semaloop: 418 I'm a teapot",
 		},
 		{
 			name:   "forbidden",

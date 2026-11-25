@@ -88,6 +88,10 @@ func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer
 		switch code := statusCode(err); {
 		case code == http.StatusForbidden:
 			return SyncResult{}, client.ErrForbidden
+		case code >= 500:
+			// A server that failed partway may have applied part of the
+			// sync.
+			return SyncResult{}, fmt.Errorf("unexpected response from Semaloop: %d %s, so the sync may have been applied", code, http.StatusText(code))
 		case code != 0:
 			// The server was reached but answered with a status the client
 			// doesn't expect, so this isn't a connection problem.
