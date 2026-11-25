@@ -224,12 +224,24 @@ func orEmpty(s []string) []string {
 	return s
 }
 
+// capabilities maps the files' snake_case capability names, e.g.
+// audio_input, to the API's camelCase ones, e.g. audioInput.
 func capabilities(names []string) []api.TestCapabilityName {
 	caps := make([]api.TestCapabilityName, len(names))
 	for i, n := range names {
-		caps[i] = api.TestCapabilityName(n)
+		caps[i] = api.TestCapabilityName(camelCase(n))
 	}
 	return caps
+}
+
+func camelCase(s string) string {
+	parts := strings.Split(s, "_")
+	for i := 1; i < len(parts); i++ {
+		if parts[i] != "" {
+			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		}
+	}
+	return strings.Join(parts, "")
 }
 
 func errorMessages(errs []api.ErrorResponseErrorsItem) string {
