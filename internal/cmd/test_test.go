@@ -108,7 +108,7 @@ func TestSyncTestsSendsFiles(t *testing.T) {
 	got, _ := json.Marshal(body)
 	want := `{"allowArchiveAll":true,"tests":[` +
 		`{"description":"Buy something.","disabledCapabilities":[],"identifier":"checkout","name":"Checkout","tags":[]},` +
-		`{"description":"Sign in.","disabledCapabilities":["audio_input"],"draft":false,"folder":"Smoke","identifier":"sign-in","name":"Sign in","secrets":[],"tags":["smoke"],"takeOverTestId":"01JABC"}` +
+		`{"description":"Sign in.","disabledCapabilities":["audioInput"],"draft":false,"folder":"Smoke","identifier":"sign-in","name":"Sign in","secrets":[],"tags":["smoke"],"takeOverTestId":"01JABC"}` +
 		`]}`
 	if string(got) != want {
 		t.Errorf("got request:\n%s\nwant:\n%s", got, want)
