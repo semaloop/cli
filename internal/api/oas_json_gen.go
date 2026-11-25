@@ -2978,14 +2978,14 @@ func (s *SyncTestChange) Encode(e *jx.Encoder) {
 func (s *SyncTestChange) encodeFields(e *jx.Encoder) {
 	{
 		e.FieldStart("action")
-		s.Action.Encode(e)
+		e.Str(s.Action)
 	}
 	{
 		if s.Fields != nil {
 			e.FieldStart("fields")
 			e.ArrStart()
 			for _, elem := range s.Fields {
-				elem.Encode(e)
+				e.Str(elem)
 			}
 			e.ArrEnd()
 		}
@@ -3033,7 +3033,9 @@ func (s *SyncTestChange) Decode(d *jx.Decoder) error {
 		case "action":
 			requiredBitSet[0] |= 1 << 0
 			if err := func() error {
-				if err := s.Action.Decode(d); err != nil {
+				v, err := d.Str()
+				s.Action = string(v)
+				if err != nil {
 					return err
 				}
 				return nil
@@ -3042,10 +3044,12 @@ func (s *SyncTestChange) Decode(d *jx.Decoder) error {
 			}
 		case "fields":
 			if err := func() error {
-				s.Fields = make([]SyncTestChangeFieldsItem, 0)
+				s.Fields = make([]string, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
-					var elem SyncTestChangeFieldsItem
-					if err := elem.Decode(d); err != nil {
+					var elem string
+					v, err := d.Str()
+					elem = string(v)
+					if err != nil {
 						return err
 					}
 					s.Fields = append(s.Fields, elem)
@@ -3151,104 +3155,6 @@ func (s *SyncTestChange) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *SyncTestChange) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
-// Encode encodes SyncTestChangeAction as json.
-func (s SyncTestChangeAction) Encode(e *jx.Encoder) {
-	e.Str(string(s))
-}
-
-// Decode decodes SyncTestChangeAction from json.
-func (s *SyncTestChangeAction) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode SyncTestChangeAction to nil")
-	}
-	v, err := d.StrBytes()
-	if err != nil {
-		return err
-	}
-	// Try to use constant string.
-	switch SyncTestChangeAction(v) {
-	case SyncTestChangeActionCreate:
-		*s = SyncTestChangeActionCreate
-	case SyncTestChangeActionUpdate:
-		*s = SyncTestChangeActionUpdate
-	case SyncTestChangeActionTakeOver:
-		*s = SyncTestChangeActionTakeOver
-	case SyncTestChangeActionArchive:
-		*s = SyncTestChangeActionArchive
-	case SyncTestChangeActionUnchanged:
-		*s = SyncTestChangeActionUnchanged
-	default:
-		*s = SyncTestChangeAction(v)
-	}
-
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s SyncTestChangeAction) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SyncTestChangeAction) UnmarshalJSON(data []byte) error {
-	d := jx.DecodeBytes(data)
-	return s.Decode(d)
-}
-
-// Encode encodes SyncTestChangeFieldsItem as json.
-func (s SyncTestChangeFieldsItem) Encode(e *jx.Encoder) {
-	e.Str(string(s))
-}
-
-// Decode decodes SyncTestChangeFieldsItem from json.
-func (s *SyncTestChangeFieldsItem) Decode(d *jx.Decoder) error {
-	if s == nil {
-		return errors.New("invalid: unable to decode SyncTestChangeFieldsItem to nil")
-	}
-	v, err := d.StrBytes()
-	if err != nil {
-		return err
-	}
-	// Try to use constant string.
-	switch SyncTestChangeFieldsItem(v) {
-	case SyncTestChangeFieldsItemName:
-		*s = SyncTestChangeFieldsItemName
-	case SyncTestChangeFieldsItemDescription:
-		*s = SyncTestChangeFieldsItemDescription
-	case SyncTestChangeFieldsItemFolder:
-		*s = SyncTestChangeFieldsItemFolder
-	case SyncTestChangeFieldsItemDraft:
-		*s = SyncTestChangeFieldsItemDraft
-	case SyncTestChangeFieldsItemRestored:
-		*s = SyncTestChangeFieldsItemRestored
-	case SyncTestChangeFieldsItemTags:
-		*s = SyncTestChangeFieldsItemTags
-	case SyncTestChangeFieldsItemSecrets:
-		*s = SyncTestChangeFieldsItemSecrets
-	case SyncTestChangeFieldsItemDisabledCapabilities:
-		*s = SyncTestChangeFieldsItemDisabledCapabilities
-	default:
-		*s = SyncTestChangeFieldsItem(v)
-	}
-
-	return nil
-}
-
-// MarshalJSON implements stdjson.Marshaler.
-func (s SyncTestChangeFieldsItem) MarshalJSON() ([]byte, error) {
-	e := jx.Encoder{}
-	s.Encode(&e)
-	return e.Bytes(), nil
-}
-
-// UnmarshalJSON implements stdjson.Unmarshaler.
-func (s *SyncTestChangeFieldsItem) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }
@@ -3585,7 +3491,9 @@ func (s *SyncTestsResponseSuccess) UnmarshalJSON(data []byte) error {
 
 // Encode encodes TestCapabilityName as json.
 func (s TestCapabilityName) Encode(e *jx.Encoder) {
-	e.Str(string(s))
+	unwrapped := string(s)
+
+	e.Str(unwrapped)
 }
 
 // Decode decodes TestCapabilityName from json.
@@ -3593,22 +3501,18 @@ func (s *TestCapabilityName) Decode(d *jx.Decoder) error {
 	if s == nil {
 		return errors.New("invalid: unable to decode TestCapabilityName to nil")
 	}
-	v, err := d.StrBytes()
-	if err != nil {
-		return err
+	var unwrapped string
+	if err := func() error {
+		v, err := d.Str()
+		unwrapped = string(v)
+		if err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return errors.Wrap(err, "alias")
 	}
-	// Try to use constant string.
-	switch TestCapabilityName(v) {
-	case TestCapabilityNameAudioInput:
-		*s = TestCapabilityNameAudioInput
-	case TestCapabilityNameDynamicIsland:
-		*s = TestCapabilityNameDynamicIsland
-	case TestCapabilityNamePhoneNumber:
-		*s = TestCapabilityNamePhoneNumber
-	default:
-		*s = TestCapabilityName(v)
-	}
-
+	*s = TestCapabilityName(unwrapped)
 	return nil
 }
 
