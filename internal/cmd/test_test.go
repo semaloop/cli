@@ -106,7 +106,7 @@ func TestSyncTestsSendsFiles(t *testing.T) {
 
 	got, _ := json.Marshal(body)
 	want := `{"allowArchiveAll":true,"tests":[` +
-		`{"description":"Buy something.","identifier":"checkout","name":"Checkout"},` +
+		`{"description":"Buy something.","disabledCapabilities":[],"identifier":"checkout","name":"Checkout","tags":[]},` +
 		`{"description":"Sign in.","disabledCapabilities":["audio_input"],"draft":false,"folder":"Smoke","identifier":"sign-in","name":"Sign in","secrets":[],"tags":["smoke"],"takeOverTestId":"01JABC"}` +
 		`]}`
 	if string(got) != want {
@@ -128,6 +128,26 @@ func TestSyncTestsEmptyDirectorySendsEmptyList(t *testing.T) {
 		t.Fatal(err)
 	}
 	if want := `{"allowArchiveAll":false,"tests":[]}`; string(raw) != want {
+		t.Errorf("got request %s, want %s", raw, want)
+	}
+}
+
+// Leaving out tags or disabled_capabilities means none, so they're sent as
+// empty lists. A left-out secrets is not sent.
+func TestSyncTestsSendsEmptyListsForLeftOutFields(t *testing.T) {
+	var raw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ = io.ReadAll(r.Body)
+		jsonResponse(w, http.StatusOK, `{"success":true,"result":{"revision":1,"changes":[]}}`)
+	}))
+	defer srv.Close()
+
+	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
+	if _, err := SyncTests(context.Background(), "key", srv.URL, dir, io.Discard, SyncOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	want := `{"allowArchiveAll":false,"tests":[{"description":"Buy something.","disabledCapabilities":[],"identifier":"checkout","name":"Checkout","tags":[]}]}`
+	if string(raw) != want {
 		t.Errorf("got request %s, want %s", raw, want)
 	}
 }
@@ -211,6 +231,12 @@ func TestSyncTestsErrors(t *testing.T) {
 			status: http.StatusUnauthorized,
 			body:   `{"success":false,"errors":[]}`,
 			wantIs: client.ErrUnauthorized,
+		},
+		{
+			name:    "unexpected status",
+			status:  http.StatusInternalServerError,
+			body:    `{}`,
+			wantMsg: "unexpected response from Semaloop: 500 Internal Server Error",
 		},
 		{
 			name:   "forbidden",

@@ -36,6 +36,26 @@ import (
 // DefaultDir is where test files live, relative to the repository root.
 const DefaultDir = ".semaloop/tests"
 
+// FindDir returns the default test directory for a command run from wd:
+// DefaultDir at the root of the Git repository containing wd, relative to wd
+// where possible. Outside a repository it returns DefaultDir, relative to wd.
+func FindDir(wd string) string {
+	for dir := wd; ; {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			path := filepath.Join(dir, DefaultDir)
+			if rel, err := filepath.Rel(wd, path); err == nil {
+				return rel
+			}
+			return path
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return DefaultDir
+		}
+		dir = parent
+	}
+}
+
 // Limits on tags, matching the dashboard's.
 const (
 	MaxTags      = 20
@@ -176,13 +196,13 @@ func Parse(path string, data []byte) (Test, []Error) {
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
 
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+	if len(lines) == 0 || !isFence(lines[0]) {
 		fail(1, "missing frontmatter: start the file with a line containing --- followed by the test's settings")
 		return t, errs
 	}
 	end := -1
 	for i := 1; i < len(lines); i++ {
-		if strings.TrimRight(lines[i], " \t") == "---" {
+		if isFence(lines[i]) {
 			end = i
 			break
 		}
@@ -308,16 +328,31 @@ func Parse(path string, data []byte) (Test, []Error) {
 }
 
 func checkTags(tags []string, line int, fail func(int, string, ...any)) {
-	distinct := map[string]bool{}
+	distinct := map[string]string{}
 	for _, tag := range tags {
 		if utf8.RuneCountInString(tag) > MaxTagLength {
 			fail(line, "tag %q is longer than %d characters", tag, MaxTagLength)
 		}
-		distinct[strings.ToLower(tag)] = true
+		key := strings.ToLower(tag)
+		if prev, ok := distinct[key]; ok {
+			if prev == tag {
+				fail(line, "tag %q is listed more than once", tag)
+			} else {
+				fail(line, "tags %q and %q are the same tag: tags ignore case", prev, tag)
+			}
+			continue
+		}
+		distinct[key] = tag
 	}
 	if len(distinct) > MaxTags {
 		fail(line, "a test can have at most %d tags, but this one has %d", MaxTags, len(distinct))
 	}
+}
+
+// isFence reports whether line opens or closes the frontmatter. Both fences
+// must start at the beginning of the line; trailing whitespace is allowed.
+func isFence(line string) bool {
+	return strings.TrimRight(line, " \t") == "---"
 }
 
 func isNull(n *yaml.Node) bool {

@@ -23,6 +23,7 @@ type CompletionCmd struct {
 // suggestions, so tag any argument that takes a path.
 var completionPredictors = map[string]complete.Predictor{
 	"file": complete.PredictFiles("*"),
+	"dir":  complete.PredictDirs("*"),
 }
 
 func (c *CompletionCmd) Help() string {

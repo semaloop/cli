@@ -82,8 +82,13 @@ func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer
 	log.Info("Syncing tests.", "dir", dir, "tests", len(tests))
 	res, err := c.PostSyncTests(ctx, req)
 	if err != nil {
-		if statusCode(err) == http.StatusForbidden {
+		switch code := statusCode(err); {
+		case code == http.StatusForbidden:
 			return SyncResult{}, client.ErrForbidden
+		case code != 0:
+			// The server was reached but answered with a status the client
+			// doesn't expect, so this isn't a connection problem.
+			return SyncResult{}, fmt.Errorf("unexpected response from Semaloop: %d %s", code, http.StatusText(code))
 		}
 		return SyncResult{}, fmt.Errorf("could not connect to Semaloop: %w", err)
 	}
@@ -107,12 +112,15 @@ func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer
 // syncInput maps a test file to the sync request's fields.
 func syncInput(t testfile.Test) api.SyncTestInput {
 	in := api.SyncTestInput{
-		Identifier:           t.Identifier,
-		Name:                 t.Name,
-		Description:          t.Description,
-		Tags:                 t.Tags,
+		Identifier:  t.Identifier,
+		Name:        t.Name,
+		Description: t.Description,
+		// A left-out tags or disabled_capabilities means none, so send an
+		// empty list rather than leaving the field out. Only secrets treats
+		// a missing field differently from an empty one.
+		Tags:                 orEmpty(t.Tags),
 		Secrets:              t.Secrets,
-		DisabledCapabilities: t.DisabledCapabilities,
+		DisabledCapabilities: orEmpty(t.DisabledCapabilities),
 	}
 	if t.Folder != "" {
 		in.Folder = api.NewOptString(t.Folder)
@@ -124,6 +132,13 @@ func syncInput(t testfile.Test) api.SyncTestInput {
 		in.TakeOverTestId = api.NewOptString(t.TakeOverTestID)
 	}
 	return in
+}
+
+func orEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 func errorMessages(errs []api.ErrorResponseErrorsItem) string {

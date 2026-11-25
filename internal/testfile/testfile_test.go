@@ -103,6 +103,24 @@ func TestParseErrors(t *testing.T) {
 			want: []string{"t.md:1: missing frontmatter"},
 		},
 		{
+			name: "indented opening fence",
+			src:  "  ---\nidentifier: a\nname: A\n---\nDo it.\n",
+			want: []string{"t.md:1: missing frontmatter"},
+		},
+		{
+			name: "indented closing fence",
+			src:  "---\nidentifier: a\nname: A\n  ---\nDo it.\n",
+			want: []string{"t.md:1: frontmatter is never closed"},
+		},
+		{
+			name: "duplicate tags",
+			src:  "---\nidentifier: a\nname: A\ntags: [smoke, smoke, Login, login]\n---\nDo it.\n",
+			want: []string{
+				`t.md:4: tag "smoke" is listed more than once`,
+				`t.md:4: tags "Login" and "login" are the same tag: tags ignore case`,
+			},
+		},
+		{
 			name: "unclosed frontmatter",
 			src:  "---\nidentifier: a\nname: A\n",
 			want: []string{"t.md:1: frontmatter is never closed"},
@@ -201,11 +219,31 @@ func TestParseErrors(t *testing.T) {
 	}
 }
 
-// Many duplicate tags count once, as the API normalises them.
-func TestParseDuplicateTagsCountOnce(t *testing.T) {
-	src := "---\nidentifier: a\nname: A\ntags: [" + strings.Repeat("smoke, Smoke, ", MaxTags) + "]\n---\nDo it.\n"
-	if _, errs := Parse("t.md", []byte(src)); len(errs) > 0 {
-		t.Errorf("unexpected errors: %v", errs)
+func TestFindDir(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "ios", "App")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A stray test directory below the root must not be picked up.
+	if err := os.MkdirAll(filepath.Join(root, "ios", DefaultDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := FindDir(root); got != DefaultDir {
+		t.Errorf("from the root: got %q, want %q", got, DefaultDir)
+	}
+	if got, want := FindDir(sub), filepath.Join("..", "..", DefaultDir); got != want {
+		t.Errorf("from a subdirectory: got %q, want %q", got, want)
+	}
+}
+
+func TestFindDirOutsideRepository(t *testing.T) {
+	if got := FindDir(t.TempDir()); got != DefaultDir {
+		t.Errorf("got %q, want %q", got, DefaultDir)
 	}
 }
 

@@ -9,7 +9,20 @@ import (
 	"github.com/semaloop/cli/internal/client"
 	icmd "github.com/semaloop/cli/internal/cmd"
 	"github.com/semaloop/cli/internal/config"
+	"github.com/semaloop/cli/internal/testfile"
 )
+
+// testDir returns path, or the repository's test directory if it's empty.
+func testDir(path string) (string, error) {
+	if path != "" {
+		return path, nil
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("could not find the current directory: %w", err)
+	}
+	return testfile.FindDir(wd), nil
+}
 
 type TestCmd struct {
 	Check TestCheckCmd `cmd:"" help:"Check test files offline and report every error."`
@@ -18,26 +31,34 @@ type TestCmd struct {
 
 // TestCheckCmd checks test files without an API key or any network calls.
 type TestCheckCmd struct {
-	Path string `arg:"" optional:"" default:".semaloop/tests" help:"Directory of test files." completion-predictor:"file"`
+	Path string `arg:"" optional:"" help:"Directory of test files. Defaults to .semaloop/tests at the root of the Git repository." completion-predictor:"dir"`
 }
 
 func (c *TestCheckCmd) Run() error {
-	tests, err := icmd.CheckTests(c.Path, os.Stdout)
+	dir, err := testDir(c.Path)
 	if err != nil {
 		return err
 	}
-	log.Info("Test files are valid.", "dir", c.Path, "tests", len(tests))
+	tests, err := icmd.CheckTests(dir, os.Stdout)
+	if err != nil {
+		return err
+	}
+	log.Info("Test files are valid.", "dir", dir, "tests", len(tests))
 	return nil
 }
 
 // TestSyncCmd creates, updates and archives the app's tests in code so they
 // match the test files.
 type TestSyncCmd struct {
-	Path            string `arg:"" optional:"" default:".semaloop/tests" help:"Directory of test files." completion-predictor:"file"`
+	Path            string `arg:"" optional:"" help:"Directory of test files. Defaults to .semaloop/tests at the root of the Git repository." completion-predictor:"dir"`
 	AllowArchiveAll bool   `help:"Allow a sync that would archive every test in code, e.g. when the directory is empty." name:"allow-archive-all"`
 }
 
 func (c *TestSyncCmd) Run(g *Globals) error {
+	dir, err := testDir(c.Path)
+	if err != nil {
+		return err
+	}
 	apiKey, err := config.APIKey()
 	if err != nil {
 		return fmt.Errorf("could not load configuration: %w", err)
@@ -47,7 +68,7 @@ func (c *TestSyncCmd) Run(g *Globals) error {
 		return fmt.Errorf("not authenticated, run `semaloop auth login` first")
 	}
 
-	_, err = icmd.SyncTests(context.Background(), apiKey, client.ServerURL(), c.Path, os.Stdout, icmd.SyncOptions{
+	_, err = icmd.SyncTests(context.Background(), apiKey, client.ServerURL(), dir, os.Stdout, icmd.SyncOptions{
 		DryRun:          g.DryRun,
 		AllowArchiveAll: c.AllowArchiveAll,
 	})
