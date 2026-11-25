@@ -581,7 +581,7 @@ func TestDiffShowsUnknownActionsAndFields(t *testing.T) {
 	dir := writeTestFiles(t, map[string]string{"smoke/sign-in.md": signInFile, "checkout.md": checkoutFile})
 
 	var out bytes.Buffer
-	if _, err := Diff(context.Background(), srv.client(dir), &out, false); err != nil {
+	if _, err := Diff(context.Background(), srv.client(dir), &out, DiffOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"? checkout", "restore", "~ sign-in", "schedule", "1 to update, 1 restore, 0 unchanged."} {
