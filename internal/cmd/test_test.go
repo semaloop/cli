@@ -226,7 +226,7 @@ func TestDiffWritesPlan(t *testing.T) {
 	dir := writeTestFiles(t, map[string]string{"smoke/sign-in.md": signInFile, "checkout.md": checkoutFile})
 
 	var out bytes.Buffer
-	if _, err := Diff(context.Background(), srv.client(dir), &out, false); err != nil {
+	if _, err := Diff(context.Background(), srv.client(dir), &out, DiffOptions{Hint: true}); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := requestOptions(t, srv.requests[0]), `{"allowArchiveAll":true,"dryRun":true}`; got != want {
@@ -249,7 +249,7 @@ func TestDiffWithoutChanges(t *testing.T) {
 	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
 
 	var out bytes.Buffer
-	if _, err := Diff(context.Background(), srv.client(dir), &out, false); err != nil {
+	if _, err := Diff(context.Background(), srv.client(dir), &out, DiffOptions{Hint: true}); err != nil {
 		t.Fatal(err)
 	}
 	if want := dir + " → the app for your API key\n\nNo changes, 1 unchanged.\n"; out.String() != want {
@@ -262,7 +262,7 @@ func TestDiffWritesJSON(t *testing.T) {
 	dir := writeTestFiles(t, map[string]string{"smoke/sign-in.md": signInFile, "checkout.md": checkoutFile})
 
 	var out bytes.Buffer
-	if _, err := Diff(context.Background(), srv.client(dir), &out, true); err != nil {
+	if _, err := Diff(context.Background(), srv.client(dir), &out, DiffOptions{JSON: true}); err != nil {
 		t.Fatal(err)
 	}
 	var got jsonPlan

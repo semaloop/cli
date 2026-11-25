@@ -235,17 +235,25 @@ func errorMessages(errs []api.ErrorResponseErrorsItem) string {
 	return strings.Join(msgs, "; ")
 }
 
+// DiffOptions configures Diff.
+type DiffOptions struct {
+	// JSON writes the plan as JSON.
+	JSON bool
+	// Hint ends a plan with changes by saying how to apply it.
+	Hint bool
+}
+
 // Diff writes what a sync would change to out, without changing anything.
-func Diff(ctx context.Context, s *SyncClient, out io.Writer, asJSON bool) (*Plan, error) {
+func Diff(ctx context.Context, s *SyncClient, out io.Writer, opts DiffOptions) (*Plan, error) {
 	p, err := s.Plan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if asJSON {
+	if opts.JSON {
 		p.WriteJSON(out)
 	} else {
 		p.WriteText(out)
-		if p.HasChanges() {
+		if opts.Hint && p.HasChanges() {
 			fmt.Fprintln(out, "Run `semaloop test sync` to apply.")
 		}
 	}

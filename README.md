@@ -117,6 +117,37 @@ Allows a build to be pushed to Semaloop. Arguments like `--git-repo` are deduced
     api-key: ${{ secrets.SEMALOOP_API_KEY }}
 ```
 
+### `semaloop/cli/actions/test-sync`
+
+Keeps Semaloop's tests in sync with the test files in your repository. On a pull request it checks the files and shows the plan in the job summary, without changing anything. On other events, such as a push to your main branch, it syncs. See [`actions/test-sync`](./actions/test-sync/action.yml) for the full list of inputs.
+
+```yaml
+on:
+  pull_request:
+    paths: [.semaloop/tests/**]
+  push:
+    branches: [main]
+    paths: [.semaloop/tests/**]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semaloop-tests-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  semaloop-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: semaloop/cli/actions/test-sync@v1
+        with:
+          api-key: ${{ secrets.SEMALOOP_API_KEY }}
+```
+
+GitHub doesn't give secrets to pull requests from forks, so for those the action only checks the files and says in the job summary why the plan was skipped. Use `pull_request` rather than `pull_request_target`, which would run with your secrets on a fork's changes. The `concurrency` group stops two syncs running at once.
+
 ## Contributing
 
 Information on contributing can be found in [CONTRIBUTING.md](./CONTRIBUTING.md).

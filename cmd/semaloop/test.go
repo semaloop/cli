@@ -65,7 +65,12 @@ func diff(path string, out TestOutput) error {
 	if err != nil {
 		return err
 	}
-	_, err = icmd.Diff(context.Background(), s, os.Stdout, out.json())
+	_, err = icmd.Diff(context.Background(), s, os.Stdout, icmd.DiffOptions{
+		JSON: out.json(),
+		// Only a person at a terminal can act on the hint. In CI, how a plan
+		// gets applied is up to the workflow.
+		Hint: term.IsTerminal(int(os.Stdout.Fd())),
+	})
 	return syncError("test diff", err)
 }
 
