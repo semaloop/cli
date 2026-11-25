@@ -10,7 +10,7 @@ import (
 )
 
 var regexMap = map[string]ogenregex.Regexp{
-	"^[0-9a-f]{7,64}$/i":           ogenregex.MustCompile("^[0-9a-f]{7,64}$/i"),
+	"^[0-9a-fA-F]{7,64}$":          ogenregex.MustCompile("^[0-9a-fA-F]{7,64}$"),
 	"^[A-Za-z0-9][A-Za-z0-9._-]*$": ogenregex.MustCompile("^[A-Za-z0-9][A-Za-z0-9._-]*$"),
 }
 

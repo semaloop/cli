@@ -806,7 +806,7 @@ func (s *SyncSource) Validate() error {
 			MaxLengthSet:  false,
 			Email:         false,
 			Hostname:      false,
-			Regex:         regexMap["^[0-9a-f]{7,64}$/i"],
+			Regex:         regexMap["^[0-9a-fA-F]{7,64}$"],
 			MinNumeric:    0,
 			MinNumericSet: false,
 			MaxNumeric:    0,
