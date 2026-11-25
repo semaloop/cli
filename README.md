@@ -148,6 +148,8 @@ jobs:
           api-key: ${{ secrets.SEMALOOP_API_KEY }}
 ```
 
+When it syncs, it sends the repository, the commit and each test's file, so Semaloop can link each test to its file. A sync run outside GitHub Actions sends none of these.
+
 GitHub doesn't give secrets to pull requests from forks, so for those the action only checks the files and says in the job summary why the plan was skipped. Use `pull_request` rather than `pull_request_target`, which would run with your secrets on a fork's changes. The `concurrency` group stops two syncs running at once.
 
 ## Contributing

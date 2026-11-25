@@ -3,6 +3,8 @@
 package api
 
 import (
+	"net/url"
+
 	"github.com/go-faster/errors"
 )
 
@@ -482,6 +484,9 @@ type ManagedTestInput struct {
 	// Stable identifier for the test in code, unique within the app. Not a Semaloop test ID.
 	Identifier string `json:"identifier"`
 	Name       string `json:"name"`
+	// The test's file, relative to the repository root, e.g. `.semaloop/tests/sign-in.md`. Only stored
+	// with `source`.
+	Path OptString `json:"path"`
 	// Slugs of the app's secrets to link. If omitted, a new test gets the app's defaults and an existing
 	// test keeps its current secrets.
 	Secrets []string `json:"secrets"`
@@ -520,6 +525,11 @@ func (s *ManagedTestInput) GetIdentifier() string {
 // GetName returns the value of Name.
 func (s *ManagedTestInput) GetName() string {
 	return s.Name
+}
+
+// GetPath returns the value of Path.
+func (s *ManagedTestInput) GetPath() OptString {
+	return s.Path
 }
 
 // GetSecrets returns the value of Secrets.
@@ -565,6 +575,11 @@ func (s *ManagedTestInput) SetIdentifier(val string) {
 // SetName sets the value of Name.
 func (s *ManagedTestInput) SetName(val string) {
 	s.Name = val
+}
+
+// SetPath sets the value of Path.
+func (s *ManagedTestInput) SetPath(val OptString) {
+	s.Path = val
 }
 
 // SetSecrets sets the value of Secrets.
@@ -966,6 +981,52 @@ func (o OptString) Or(d string) string {
 	return d
 }
 
+// NewOptSyncSource returns new OptSyncSource with value set to v.
+func NewOptSyncSource(v SyncSource) OptSyncSource {
+	return OptSyncSource{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptSyncSource is optional SyncSource.
+type OptSyncSource struct {
+	Value SyncSource
+	Set   bool
+}
+
+// IsSet returns true if OptSyncSource was set.
+func (o OptSyncSource) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptSyncSource) Reset() {
+	var v SyncSource
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptSyncSource) SetTo(v SyncSource) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptSyncSource) Get() (v SyncSource, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptSyncSource) Or(d SyncSource) SyncSource {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptSyncTestChangeTakeOverRedundant returns new OptSyncTestChangeTakeOverRedundant with value set to v.
 func NewOptSyncTestChangeTakeOverRedundant(v SyncTestChangeTakeOverRedundant) OptSyncTestChangeTakeOverRedundant {
 	return OptSyncTestChangeTakeOverRedundant{
@@ -1123,6 +1184,7 @@ type PostSyncTestsReq struct {
 	BaseRevision OptInt `json:"baseRevision"`
 	// Return the plan without applying it.
 	DryRun OptBool            `json:"dryRun"`
+	Source OptSyncSource      `json:"source"`
 	Tests  []ManagedTestInput `json:"tests"`
 }
 
@@ -1139,6 +1201,11 @@ func (s *PostSyncTestsReq) GetBaseRevision() OptInt {
 // GetDryRun returns the value of DryRun.
 func (s *PostSyncTestsReq) GetDryRun() OptBool {
 	return s.DryRun
+}
+
+// GetSource returns the value of Source.
+func (s *PostSyncTestsReq) GetSource() OptSyncSource {
+	return s.Source
 }
 
 // GetTests returns the value of Tests.
@@ -1161,6 +1228,11 @@ func (s *PostSyncTestsReq) SetDryRun(val OptBool) {
 	s.DryRun = val
 }
 
+// SetSource sets the value of Source.
+func (s *PostSyncTestsReq) SetSource(val OptSyncSource) {
+	s.Source = val
+}
+
 // SetTests sets the value of Tests.
 func (s *PostSyncTestsReq) SetTests(val []ManagedTestInput) {
 	s.Tests = val
@@ -1169,6 +1241,36 @@ func (s *PostSyncTestsReq) SetTests(val []ManagedTestInput) {
 type PostSyncTestsUnauthorized ErrorResponse
 
 func (*PostSyncTestsUnauthorized) postSyncTestsRes() {}
+
+// Where the test files came from, so the dashboard can link to each test's file. Leave it out for a
+// sync run outside CI.
+// Ref: #/components/schemas/SyncSource
+type SyncSource struct {
+	// The commit the test files were read from.
+	Commit string `json:"commit"`
+	// The repository's web URL, e.g. `https://github.com/acme/app`.
+	Repository url.URL `json:"repository"`
+}
+
+// GetCommit returns the value of Commit.
+func (s *SyncSource) GetCommit() string {
+	return s.Commit
+}
+
+// GetRepository returns the value of Repository.
+func (s *SyncSource) GetRepository() url.URL {
+	return s.Repository
+}
+
+// SetCommit sets the value of Commit.
+func (s *SyncSource) SetCommit(val string) {
+	s.Commit = val
+}
+
+// SetRepository sets the value of Repository.
+func (s *SyncSource) SetRepository(val url.URL) {
+	s.Repository = val
+}
 
 // Ref: #/components/schemas/SyncTestChange
 type SyncTestChange struct {
