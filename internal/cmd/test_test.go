@@ -535,10 +535,16 @@ func TestSyncErrors(t *testing.T) {
 			wantIs: client.ErrUnauthorized,
 		},
 		{
-			name:    "unexpected status",
+			name:    "server error",
 			status:  http.StatusInternalServerError,
 			body:    `{}`,
-			wantMsg: "unexpected response from Semaloop: 500 Internal Server Error",
+			wantMsg: "unexpected response from Semaloop: 500 Internal Server Error, so the sync may have been applied",
+		},
+		{
+			name:    "unexpected status",
+			status:  http.StatusTeapot,
+			body:    `{}`,
+			wantMsg: "unexpected response from Semaloop: 418 I'm a teapot",
 		},
 		{
 			name:   "forbidden",
@@ -644,5 +650,13 @@ func TestLoadTestsOnlyWritesErrors(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Errorf("expected no output, got %q", out.String())
+	}
+}
+
+func TestPlanServerErrorDoesntSayApplied(t *testing.T) {
+	srv := newSyncServer(t, syncResponse{http.StatusBadGateway, `{}`})
+	_, err := srv.client(t.TempDir()).Plan(context.Background())
+	if err == nil || strings.Contains(err.Error(), "may have been applied") {
+		t.Errorf("expected a plain error for a plan, got %v", err)
 	}
 }
