@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -154,6 +155,21 @@ func errorMessages(errs []api.ErrorResponseErrorsItem) string {
 	return strings.Join(msgs, "; ")
 }
 
+type changeAction struct {
+	action api.SyncTestChangeAction
+	symbol string
+	label  string
+}
+
+// actions lists the changes a sync can make, in the order totals are given,
+// with the symbol and label each is shown with.
+var actions = []changeAction{
+	{api.SyncTestChangeActionCreate, "+", "created"},
+	{api.SyncTestChangeActionUpdate, "~", "updated"},
+	{api.SyncTestChangeActionTakeOver, "~", "taken over"},
+	{api.SyncTestChangeActionArchive, "-", "archived"},
+}
+
 // writeChanges lists what changed, one test per line, followed by totals.
 // Unchanged tests are only counted.
 func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []api.SyncTestChange) {
@@ -167,27 +183,19 @@ func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []ap
 	counts := map[api.SyncTestChangeAction]int{}
 	for _, ch := range changes {
 		counts[ch.Action]++
-		var symbol, detail string
-		switch ch.Action {
-		case api.SyncTestChangeActionCreate:
-			symbol, detail = "+", "created"
-		case api.SyncTestChangeActionUpdate:
-			symbol, detail = "~", "updated"
-		case api.SyncTestChangeActionTakeOver:
-			symbol, detail = "~", "taken over"
-		case api.SyncTestChangeActionArchive:
-			symbol, detail = "-", "archived"
-		default:
+		i := slices.IndexFunc(actions, func(a changeAction) bool { return a.action == ch.Action })
+		if i < 0 {
 			continue
 		}
+		detail := actions[i].label
 		if len(ch.Fields) > 0 {
 			names := make([]string, len(ch.Fields))
-			for i, f := range ch.Fields {
-				names[i] = snakeCase(f)
+			for j, f := range ch.Fields {
+				names[j] = snakeCase(f)
 			}
 			detail += ": " + strings.Join(names, ", ")
 		}
-		line := fmt.Sprintf("  %s %s  %s", symbol, ch.Identifier, detail)
+		line := fmt.Sprintf("  %s %s  %s", actions[i].symbol, ch.Identifier, detail)
 		if p, ok := paths[ch.Identifier]; ok {
 			line += "  " + p
 		}
@@ -195,15 +203,7 @@ func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []ap
 	}
 
 	var totals []string
-	for _, a := range []struct {
-		action api.SyncTestChangeAction
-		label  string
-	}{
-		{api.SyncTestChangeActionCreate, "created"},
-		{api.SyncTestChangeActionUpdate, "updated"},
-		{api.SyncTestChangeActionTakeOver, "taken over"},
-		{api.SyncTestChangeActionArchive, "archived"},
-	} {
+	for _, a := range actions {
 		if n := counts[a.action]; n > 0 {
 			totals = append(totals, fmt.Sprintf("%d %s", n, a.label))
 		}

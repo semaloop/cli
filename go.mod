@@ -11,8 +11,8 @@ require (
 	github.com/jotaen/kong-completion v0.0.15
 	github.com/ogen-go/ogen v1.20.2
 	github.com/posener/complete v1.2.3
+	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/term v0.43.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
