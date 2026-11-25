@@ -119,7 +119,7 @@ Allows a build to be pushed to Semaloop. Arguments like `--git-repo` are deduced
 
 ### `semaloop/cli/actions/test-sync`
 
-Keeps Semaloop's tests in sync with the test files in your repository. On a pull request it checks the files and shows the plan in the job summary, without changing anything. On other events, such as a push to your main branch, it syncs. See [`actions/test-sync`](./actions/test-sync/action.yml) for the full list of inputs.
+Keeps Semaloop's tests in sync with the test files in your repository. On a push, a manual run or a schedule it syncs. On any other event, such as a pull request, it checks the files and shows the plan in the job summary, without changing anything. See [`actions/test-sync`](./actions/test-sync/action.yml) for the full list of inputs.
 
 ```yaml
 on:

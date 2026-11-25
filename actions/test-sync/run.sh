@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Runs the test-sync action. On a pull request it checks the test files and
-# shows the plan, without applying it. On other events it syncs. Either way,
-# the result goes to the job summary.
+# Runs the test-sync action. On a push, a manual run or a schedule it syncs.
+# On any other event, such as a pull request, it checks the test files and
+# shows the plan, without applying it. Either way, the result goes to the job
+# summary.
 #
 # Reads SEMALOOP_API_KEY, TESTS_PATH, ALLOW_ARCHIVE_ALL and EVENT_NAME.
 set -uo pipefail
@@ -10,10 +11,11 @@ summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 out="${RUNNER_TEMP:-/tmp}/semaloop-test-sync.out"
 err="${RUNNER_TEMP:-/tmp}/semaloop-test-sync.err"
 
-# Pull requests, including ones from forks, only ever see the plan.
+# Only events that mean "this is what's merged" sync. Everything else, from
+# pull requests to review comments, only ever sees the plan.
 case "$EVENT_NAME" in
-  pull_request | pull_request_target | merge_group) mode=plan ;;
-  *) mode=sync ;;
+  push | workflow_dispatch | schedule) mode=sync ;;
+  *) mode=plan ;;
 esac
 
 case "$ALLOW_ARCHIVE_ALL" in
