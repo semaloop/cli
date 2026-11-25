@@ -165,7 +165,7 @@ func canAsk() bool {
 // TestPullCmd writes test files for the app's dashboard tests.
 type TestPullCmd struct {
 	Path    string   `arg:"" default:".semaloop/tests" help:"Directory to write test files to, relative to the current directory (default: ${default})." completion-predictor:"dir"`
-	Force   bool     `help:"Rewrite the files of tests pulled before, if they haven't been edited since."`
+	Force   bool     `help:"Rewrite the files of tests pulled before, replacing any edits to them."`
 	Folders []string `name:"folder" help:"Only pull tests in this folder. Repeat for more than one."`
 	Tests   []string `name:"test" help:"Only pull the test with this Semaloop test ID. Repeat for more than one."`
 	TestOutput
