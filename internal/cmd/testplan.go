@@ -155,12 +155,9 @@ func (p *Plan) Warnings() []string {
 	return warnings
 }
 
-// name is the test's name, from the file when there is one.
+// name is the test's name, or empty when it has no file.
 func (p *Plan) name(ch api.SyncTestChange) string {
-	if t, ok := p.tests[ch.Identifier]; ok {
-		return t.Name
-	}
-	return ch.Name.Value
+	return p.tests[ch.Identifier].Name
 }
 
 // path is the test's file, relative to the plan's directory, or empty when
@@ -179,7 +176,7 @@ func (p *Plan) path(ch api.SyncTestChange) string {
 func (p *Plan) detail(ch api.SyncTestChange) string {
 	fields := make([]string, len(ch.Fields))
 	for i, f := range ch.Fields {
-		fields[i] = snakeCase(f)
+		fields[i] = snakeCase(string(f))
 	}
 	switch ch.Action {
 	case api.SyncTestChangeActionCreate:
@@ -309,10 +306,10 @@ func (p *Plan) WriteJSON(out io.Writer) {
 			Name:              p.name(ch),
 			Path:              p.path(ch),
 			TestID:            ch.TestId.Value,
-			TakeOverRedundant: ch.TakeOverRedundant.Value,
+			TakeOverRedundant: bool(ch.TakeOverRedundant.Value),
 		}
 		for _, f := range ch.Fields {
-			c.Fields = append(c.Fields, snakeCase(f))
+			c.Fields = append(c.Fields, snakeCase(string(f)))
 		}
 		res.Changes = append(res.Changes, c)
 	}

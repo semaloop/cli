@@ -166,7 +166,7 @@ func requestOptions(t *testing.T, raw string) string {
 	return string(got)
 }
 
-const emptyResult = `{"success":true,"result":{"revision":3,"changes":[]}}`
+const emptyResult = `{"success":true,"revision":3,"changes":[]}`
 
 func TestSyncSendsFiles(t *testing.T) {
 	srv := newSyncServer(t, ok(emptyResult))
@@ -214,12 +214,12 @@ func TestSyncSendsEmptyListsForLeftOutFields(t *testing.T) {
 	}
 }
 
-const mixedResult = `{"success":true,"result":{"revision":4,"dryRun":true,"changes":[
-	{"identifier":"old","action":"archive","name":"Old"},
-	{"identifier":"other","action":"unchanged"},
-	{"identifier":"sign-in","action":"update","fields":["description","disabledCapabilities"]},
-	{"identifier":"checkout","action":"create"}
-]}}`
+const mixedResult = `{"success":true,"revision":4,"dryRun":true,"changes":[
+	{"identifier":"old","action":"archive","testId":null},
+	{"identifier":"other","action":"unchanged","testId":null},
+	{"identifier":"sign-in","action":"update","fields":["description","disabledCapabilities"],"testId":null},
+	{"identifier":"checkout","action":"create","testId":null}
+]}`
 
 func TestDiffWritesPlan(t *testing.T) {
 	srv := newSyncServer(t, ok(mixedResult))
@@ -245,7 +245,7 @@ func TestDiffWritesPlan(t *testing.T) {
 }
 
 func TestDiffWithoutChanges(t *testing.T) {
-	srv := newSyncServer(t, ok(`{"success":true,"result":{"revision":4,"changes":[{"identifier":"checkout","action":"unchanged"}]}}`))
+	srv := newSyncServer(t, ok(`{"success":true,"revision":4,"changes":[{"identifier":"checkout","action":"unchanged","testId":null}]}`))
 	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
 
 	var out bytes.Buffer
@@ -280,18 +280,19 @@ func TestDiffWritesJSON(t *testing.T) {
 	}
 }
 
-func TestPlanWarnsAboutRenamesAndRedundantTakeOvers(t *testing.T) {
+func TestPlanWarnsAboutRedundantTakeOvers(t *testing.T) {
 	dir := "tests"
 	p := newPlan(dir, []testfile.Test{
 		{Path: filepath.Join(dir, "sign-in.md"), Identifier: "sign-in", Name: "Sign in"},
 		{Path: filepath.Join(dir, "checkout.md"), Identifier: "checkout", Name: "Checkout"},
 	}, 1, false, []api.SyncTestChange{
-		{Identifier: "login", Action: api.SyncTestChangeActionArchive, Name: api.NewOptString("Sign in")},
+		{Identifier: "login", Action: api.SyncTestChangeActionArchive},
 		{Identifier: "sign-in", Action: api.SyncTestChangeActionCreate},
-		{Identifier: "checkout", Action: api.SyncTestChangeActionUnchanged, TakeOverRedundant: api.NewOptBool(true)},
+		{Identifier: "checkout", Action: api.SyncTestChangeActionUnchanged, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
 	})
+	// The API doesn't name archived tests, so there's no name to match a
+	// rename against.
 	want := []string{
-		"login looks renamed to sign-in. Changing a test's identifier creates a new test, so its history won't carry over.",
 		"checkout is already in code, so take_over_test_id can be removed from checkout.md.",
 	}
 	if got := p.Warnings(); !slices.Equal(got, want) {
@@ -316,7 +317,7 @@ func TestPlanArchivesAll(t *testing.T) {
 		{"one updated", []api.SyncTestChange{change(api.SyncTestChangeActionArchive), change(api.SyncTestChangeActionUpdate)}, false},
 		{"redundant take over", []api.SyncTestChange{
 			change(api.SyncTestChangeActionArchive),
-			{Identifier: "t", Action: api.SyncTestChangeActionTakeOver, TakeOverRedundant: api.NewOptBool(true)},
+			{Identifier: "t", Action: api.SyncTestChangeActionTakeOver, TakeOverRedundant: api.NewOptSyncTestChangeTakeOverRedundant(true)},
 		}, false},
 	}
 	for _, tt := range tests {
@@ -328,8 +329,8 @@ func TestPlanArchivesAll(t *testing.T) {
 	}
 }
 
-const plannedCreate = `{"success":true,"result":{"revision":%d,"dryRun":true,"changes":[{"identifier":"checkout","action":"create"}]}}`
-const appliedCreate = `{"success":true,"result":{"revision":%d,"changes":[{"identifier":"checkout","action":"create"}]}}`
+const plannedCreate = `{"success":true,"revision":%d,"dryRun":true,"changes":[{"identifier":"checkout","action":"create","testId":null}]}`
+const appliedCreate = `{"success":true,"revision":%d,"changes":[{"identifier":"checkout","action":"create","testId":null}]}`
 
 func confirmOptions(answers string, prompt io.Writer) SyncOptions {
 	return SyncOptions{Confirm: true, In: strings.NewReader(answers), Prompt: prompt}
@@ -380,7 +381,7 @@ func TestSyncNotConfirmedChangesNothing(t *testing.T) {
 }
 
 func TestSyncWithoutChangesDoesntAsk(t *testing.T) {
-	srv := newSyncServer(t, ok(`{"success":true,"result":{"revision":7,"changes":[{"identifier":"checkout","action":"unchanged"}]}}`))
+	srv := newSyncServer(t, ok(`{"success":true,"revision":7,"changes":[{"identifier":"checkout","action":"unchanged","testId":null}]}`))
 	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
 
 	var prompt bytes.Buffer
@@ -421,7 +422,7 @@ func TestSyncConflictPlansAgain(t *testing.T) {
 	}
 }
 
-const plannedArchiveAll = `{"success":true,"result":{"revision":7,"dryRun":true,"changes":[{"identifier":"a","action":"archive"},{"identifier":"b","action":"archive"}]}}`
+const plannedArchiveAll = `{"success":true,"revision":7,"dryRun":true,"changes":[{"identifier":"a","action":"archive","testId":null},{"identifier":"b","action":"archive","testId":null}]}`
 
 func TestSyncArchiveAllNeedsTypedConfirmation(t *testing.T) {
 	t.Run("y isn't enough", func(t *testing.T) {
@@ -443,7 +444,7 @@ func TestSyncArchiveAllNeedsTypedConfirmation(t *testing.T) {
 	})
 
 	t.Run("typed", func(t *testing.T) {
-		srv := newSyncServer(t, ok(plannedArchiveAll), ok(`{"success":true,"result":{"revision":8,"changes":[{"identifier":"a","action":"archive"},{"identifier":"b","action":"archive"}]}}`))
+		srv := newSyncServer(t, ok(plannedArchiveAll), ok(`{"success":true,"revision":8,"changes":[{"identifier":"a","action":"archive","testId":null},{"identifier":"b","action":"archive","testId":null}]}`))
 		if _, err := Sync(context.Background(), srv.client(t.TempDir()), io.Discard, confirmOptions("archive all\n", io.Discard)); err != nil {
 			t.Fatal(err)
 		}
@@ -489,7 +490,7 @@ func TestSyncErrors(t *testing.T) {
 		{
 			name:   "forbidden",
 			status: http.StatusForbidden,
-			body:   `{}`,
+			body:   `{"success":false,"errors":[{"code":403,"message":"App not found or access denied"}]}`,
 			wantIs: client.ErrForbidden,
 		},
 	}
@@ -512,7 +513,7 @@ func TestSyncErrors(t *testing.T) {
 }
 
 func TestSyncUnreadableResponseMayHaveApplied(t *testing.T) {
-	srv := newSyncServer(t, ok(`{"success":true,"result":{"revision":4,"changes":[{"identifier":"checkout","action":"restore"}]}}`))
+	srv := newSyncServer(t, ok(`{"success":true,"revision":4,"changes":[{"identifier":"checkout","action":"restore","testId":null}]}`))
 	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutFile})
 	_, err := Sync(context.Background(), srv.client(dir), io.Discard, SyncOptions{})
 	if err == nil || !strings.Contains(err.Error(), "the sync may have been applied") {
@@ -566,13 +567,13 @@ func TestSyncConnectionError(t *testing.T) {
 
 func TestWriteTextShowsUnknownActions(t *testing.T) {
 	var out bytes.Buffer
-	newPlan(".", nil, 1, true, []api.SyncTestChange{
+	newPlan(".", []testfile.Test{{Path: "b.md", Identifier: "b", Name: "B"}}, 1, true, []api.SyncTestChange{
 		{Identifier: "a", Action: "restore"},
-		{Identifier: "b", Action: api.SyncTestChangeActionCreate, Name: api.NewOptString("B")},
+		{Identifier: "b", Action: api.SyncTestChangeActionCreate},
 		{Identifier: "c", Action: "soft_delete"},
 	}).WriteText(&out)
 	want := ". → the app for your API key\n\n" +
-		"  + b   B\n" +
+		"  + b   B             b.md\n" +
 		"  ? a   restore\n" +
 		"  ? c   soft delete\n" +
 		"\n" +

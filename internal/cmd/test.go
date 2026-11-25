@@ -134,8 +134,8 @@ func (s *SyncClient) Apply(ctx context.Context, opts ApplyOptions) (*Plan, error
 }
 
 func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.OptInt, allowArchiveAll bool) (*Plan, error) {
-	req := &api.SyncTestsRequest{
-		Tests:           make([]api.SyncTestInput, 0, len(s.tests)),
+	req := api.PostSyncTestsReq{
+		Tests:           make([]api.ManagedTestInput, 0, len(s.tests)),
 		AllowArchiveAll: api.NewOptBool(allowArchiveAll),
 		BaseRevision:    baseRevision,
 	}
@@ -153,7 +153,7 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 		WroteHeaders: func() { sent.Store(true) },
 	})
 
-	res, err := s.api.PostSyncTests(ctx, req)
+	res, err := s.api.PostSyncTests(ctx, api.NewOptPostSyncTestsReq(req))
 	if err != nil {
 		switch code := statusCode(err); {
 		case code == http.StatusForbidden:
@@ -177,10 +177,12 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 	}
 
 	switch r := res.(type) {
-	case *api.PostSyncTestsOK:
-		return newPlan(s.dir, s.tests, r.Result.Revision, !dryRun, r.Result.Changes), nil
+	case *api.SyncTestsResponse:
+		return newPlan(s.dir, s.tests, r.Revision, !dryRun, r.Changes), nil
 	case *api.PostSyncTestsBadRequest:
 		return nil, fmt.Errorf("sync rejected: %s", errorMessages(r.Errors))
+	case *api.PostSyncTestsForbidden:
+		return nil, client.ErrForbidden
 	case *api.PostSyncTestsConflict:
 		return nil, fmt.Errorf("%w: %s", ErrConflict, errorMessages(r.Errors))
 	case *api.PostSyncTestsUnauthorized:
@@ -191,8 +193,8 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 }
 
 // syncInput maps a test file to the sync request's fields.
-func syncInput(t testfile.Test) api.SyncTestInput {
-	in := api.SyncTestInput{
+func syncInput(t testfile.Test) api.ManagedTestInput {
+	in := api.ManagedTestInput{
 		Identifier:  t.Identifier,
 		Name:        t.Name,
 		Description: t.Description,
@@ -201,10 +203,10 @@ func syncInput(t testfile.Test) api.SyncTestInput {
 		// a missing field differently from an empty one.
 		Tags:                 orEmpty(t.Tags),
 		Secrets:              t.Secrets,
-		DisabledCapabilities: orEmpty(t.DisabledCapabilities),
+		DisabledCapabilities: capabilities(t.DisabledCapabilities),
 	}
 	if t.Folder != "" {
-		in.Folder = api.NewOptString(t.Folder)
+		in.Folder = api.NewOptNilString(t.Folder)
 	}
 	if t.Draft != nil {
 		in.Draft = api.NewOptBool(*t.Draft)
@@ -220,6 +222,14 @@ func orEmpty(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+func capabilities(names []string) []api.TestCapabilityName {
+	caps := make([]api.TestCapabilityName, len(names))
+	for i, n := range names {
+		caps[i] = api.TestCapabilityName(n)
+	}
+	return caps
 }
 
 func errorMessages(errs []api.ErrorResponseErrorsItem) string {

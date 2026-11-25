@@ -3,9 +3,29 @@
 package api
 
 // setDefaults set default value of fields.
+func (s *ManagedTestInput) setDefaults() {
+	{
+		val := bool(false)
+		s.Draft.SetTo(val)
+	}
+}
+
+// setDefaults set default value of fields.
 func (s *PostFinalizeUploadReq) setDefaults() {
 	{
 		val := bool(false)
 		s.AllowDuplicateVersion.SetTo(val)
+	}
+}
+
+// setDefaults set default value of fields.
+func (s *PostSyncTestsReq) setDefaults() {
+	{
+		val := bool(false)
+		s.AllowArchiveAll.SetTo(val)
+	}
+	{
+		val := bool(false)
+		s.DryRun.SetTo(val)
 	}
 }
