@@ -1,7 +1,7 @@
 // generate-client preprocesses an OpenAPI spec and generates a Go HTTP client
 // using ogen. It normalises OpenAPI 3.1 nullable type arrays (e.g.
-// ["string","null"]) into the ogen-compatible form (type + nullable:true)
-// before generation.
+// ["string","null"]) into the ogen-compatible form (type + nullable:true), and
+// drops string enums, before generation.
 package main
 
 import (
@@ -123,6 +123,14 @@ func normalise(v any) {
 				}
 			}
 		}
+	}
+
+	// The generated client validates responses against every enum, so a value
+	// the API adds later, such as a new sync action, would make an older CLI
+	// reject the whole response. The API validates requests itself, so the
+	// client treats these fields as plain strings.
+	if obj["type"] == "string" {
+		delete(obj, "enum")
 	}
 
 	for _, child := range obj {
