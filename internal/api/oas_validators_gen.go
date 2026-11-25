@@ -303,23 +303,6 @@ func (s *ListedTest) Validate() error {
 		if s.Capabilities == nil {
 			return errors.New("nil is invalid value")
 		}
-		var failures []validate.FieldError
-		for i, elem := range s.Capabilities {
-			if err := func() error {
-				if err := elem.Validate(); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				failures = append(failures, validate.FieldError{
-					Name:  fmt.Sprintf("[%d]", i),
-					Error: err,
-				})
-			}
-		}
-		if len(failures) > 0 {
-			return &validate.Error{Fields: failures}
-		}
 		return nil
 	}(); err != nil {
 		failures = append(failures, validate.FieldError{
@@ -355,29 +338,6 @@ func (s *ListedTest) Validate() error {
 	return nil
 }
 
-func (s *ListedTestCapabilitiesItem) Validate() error {
-	if s == nil {
-		return validate.ErrNilPointer
-	}
-
-	var failures []validate.FieldError
-	if err := func() error {
-		if err := s.Name.Validate(); err != nil {
-			return err
-		}
-		return nil
-	}(); err != nil {
-		failures = append(failures, validate.FieldError{
-			Name:  "name",
-			Error: err,
-		})
-	}
-	if len(failures) > 0 {
-		return &validate.Error{Fields: failures}
-	}
-	return nil
-}
-
 func (s *ManagedTestInput) Validate() error {
 	if s == nil {
 		return validate.ErrNilPointer
@@ -404,31 +364,6 @@ func (s *ManagedTestInput) Validate() error {
 	}(); err != nil {
 		failures = append(failures, validate.FieldError{
 			Name:  "description",
-			Error: err,
-		})
-	}
-	if err := func() error {
-		var failures []validate.FieldError
-		for i, elem := range s.DisabledCapabilities {
-			if err := func() error {
-				if err := elem.Validate(); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				failures = append(failures, validate.FieldError{
-					Name:  fmt.Sprintf("[%d]", i),
-					Error: err,
-				})
-			}
-		}
-		if len(failures) > 0 {
-			return &validate.Error{Fields: failures}
-		}
-		return nil
-	}(); err != nil {
-		failures = append(failures, validate.FieldError{
-			Name:  "disabledCapabilities",
 			Error: err,
 		})
 	}
@@ -751,42 +686,6 @@ func (s *SyncTestChange) Validate() error {
 
 	var failures []validate.FieldError
 	if err := func() error {
-		if err := s.Action.Validate(); err != nil {
-			return err
-		}
-		return nil
-	}(); err != nil {
-		failures = append(failures, validate.FieldError{
-			Name:  "action",
-			Error: err,
-		})
-	}
-	if err := func() error {
-		var failures []validate.FieldError
-		for i, elem := range s.Fields {
-			if err := func() error {
-				if err := elem.Validate(); err != nil {
-					return err
-				}
-				return nil
-			}(); err != nil {
-				failures = append(failures, validate.FieldError{
-					Name:  fmt.Sprintf("[%d]", i),
-					Error: err,
-				})
-			}
-		}
-		if len(failures) > 0 {
-			return &validate.Error{Fields: failures}
-		}
-		return nil
-	}(); err != nil {
-		failures = append(failures, validate.FieldError{
-			Name:  "fields",
-			Error: err,
-		})
-	}
-	if err := func() error {
 		if value, ok := s.TakeOverRedundant.Get(); ok {
 			if err := func() error {
 				if err := value.Validate(); err != nil {
@@ -808,46 +707,6 @@ func (s *SyncTestChange) Validate() error {
 		return &validate.Error{Fields: failures}
 	}
 	return nil
-}
-
-func (s SyncTestChangeAction) Validate() error {
-	switch s {
-	case "create":
-		return nil
-	case "update":
-		return nil
-	case "take_over":
-		return nil
-	case "archive":
-		return nil
-	case "unchanged":
-		return nil
-	default:
-		return errors.Errorf("invalid value: %v", s)
-	}
-}
-
-func (s SyncTestChangeFieldsItem) Validate() error {
-	switch s {
-	case "name":
-		return nil
-	case "description":
-		return nil
-	case "folder":
-		return nil
-	case "draft":
-		return nil
-	case "restored":
-		return nil
-	case "tags":
-		return nil
-	case "secrets":
-		return nil
-	case "disabledCapabilities":
-		return nil
-	default:
-		return errors.Errorf("invalid value: %v", s)
-	}
 }
 
 func (s SyncTestChangeTakeOverRedundant) Validate() error {
@@ -913,19 +772,6 @@ func (s *SyncTestsResponse) Validate() error {
 func (s SyncTestsResponseSuccess) Validate() error {
 	switch s {
 	case true:
-		return nil
-	default:
-		return errors.Errorf("invalid value: %v", s)
-	}
-}
-
-func (s TestCapabilityName) Validate() error {
-	switch s {
-	case "audioInput":
-		return nil
-	case "dynamicIsland":
-		return nil
-	case "phoneNumber":
 		return nil
 	default:
 		return errors.Errorf("invalid value: %v", s)

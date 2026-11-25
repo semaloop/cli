@@ -51,8 +51,20 @@ func newPlan(dir string, app api.SyncTestsResponseApp, tests []testfile.Test, re
 	return p
 }
 
+// syncAction is what a sync does to one test. It's a plain string because
+// the API may add actions that this version of the CLI doesn't know.
+type syncAction = string
+
+const (
+	actionCreate    syncAction = "create"
+	actionUpdate    syncAction = "update"
+	actionTakeOver  syncAction = "take_over"
+	actionArchive   syncAction = "archive"
+	actionUnchanged syncAction = "unchanged"
+)
+
 type changeAction struct {
-	action  api.SyncTestChangeAction
+	action  syncAction
 	symbol  string
 	planned string
 	applied string
@@ -61,14 +73,14 @@ type changeAction struct {
 // actions lists the changes a sync can make, in the order they're shown, with
 // the symbol and labels each is shown with.
 var actions = []changeAction{
-	{api.SyncTestChangeActionCreate, "+", "to create", "created"},
-	{api.SyncTestChangeActionUpdate, "~", "to update", "updated"},
-	{api.SyncTestChangeActionTakeOver, "~", "to take over", "taken over"},
-	{api.SyncTestChangeActionArchive, "-", "to archive", "archived"},
-	{api.SyncTestChangeActionUnchanged, " ", "unchanged", "unchanged"},
+	{actionCreate, "+", "to create", "created"},
+	{actionUpdate, "~", "to update", "updated"},
+	{actionTakeOver, "~", "to take over", "taken over"},
+	{actionArchive, "-", "to archive", "archived"},
+	{actionUnchanged, " ", "unchanged", "unchanged"},
 }
 
-func actionRank(action api.SyncTestChangeAction) int {
+func actionRank(action syncAction) int {
 	if i := slices.IndexFunc(actions, func(a changeAction) bool { return a.action == action }); i >= 0 {
 		return i
 	}
@@ -77,7 +89,7 @@ func actionRank(action api.SyncTestChangeAction) int {
 
 // lookupAction returns how to show action. An action this version of the CLI
 // doesn't know is shown by its name, so no change goes unreported.
-func lookupAction(action api.SyncTestChangeAction) changeAction {
+func lookupAction(action syncAction) changeAction {
 	if i := actionRank(action); i < len(actions) {
 		return actions[i]
 	}
@@ -95,7 +107,7 @@ func (a changeAction) label(applied bool) string {
 // HasChanges reports whether the plan changes anything.
 func (p *Plan) HasChanges() bool {
 	return slices.ContainsFunc(p.Changes, func(ch api.SyncTestChange) bool {
-		return ch.Action != api.SyncTestChangeActionUnchanged
+		return ch.Action != actionUnchanged
 	})
 }
 
@@ -105,10 +117,10 @@ func (p *Plan) ArchivesAll() bool {
 	archived := false
 	for _, ch := range p.Changes {
 		switch ch.Action {
-		case api.SyncTestChangeActionArchive:
+		case actionArchive:
 			archived = true
-		case api.SyncTestChangeActionCreate:
-		case api.SyncTestChangeActionTakeOver:
+		case actionCreate:
+		case actionTakeOver:
 			// A redundant take over names a test that's already in code,
 			// and stays there.
 			if ch.TakeOverRedundant.Value {
@@ -129,12 +141,12 @@ func (p *Plan) Warnings() []string {
 	// under another with the same name.
 	created := map[string][]string{}
 	for _, ch := range p.Changes {
-		if ch.Action == api.SyncTestChangeActionCreate {
+		if ch.Action == actionCreate {
 			created[p.name(ch)] = append(created[p.name(ch)], ch.Identifier)
 		}
 	}
 	for _, ch := range p.Changes {
-		if ch.Action != api.SyncTestChangeActionArchive || p.name(ch) == "" {
+		if ch.Action != actionArchive || p.name(ch) == "" {
 			continue
 		}
 		for _, id := range created[p.name(ch)] {
@@ -180,17 +192,17 @@ func (p *Plan) detail(ch api.SyncTestChange) string {
 		fields[i] = snakeCase(string(f))
 	}
 	switch ch.Action {
-	case api.SyncTestChangeActionCreate:
+	case actionCreate:
 		return p.name(ch)
-	case api.SyncTestChangeActionUpdate:
+	case actionUpdate:
 		return strings.Join(fields, ", ")
-	case api.SyncTestChangeActionTakeOver:
+	case actionTakeOver:
 		d := "take over " + cmp.Or(ch.TestId.Value, "dashboard test")
 		if len(fields) > 0 {
 			d += ": " + strings.Join(fields, ", ")
 		}
 		return d
-	case api.SyncTestChangeActionArchive:
+	case actionArchive:
 		if p.Applied {
 			return "file removed, archived"
 		}
@@ -213,7 +225,7 @@ func (p *Plan) WriteText(out io.Writer) {
 		var b strings.Builder
 		tw := tabwriter.NewWriter(&b, 0, 0, 3, ' ', 0)
 		for _, ch := range p.Changes {
-			if ch.Action == api.SyncTestChangeActionUnchanged {
+			if ch.Action == actionUnchanged {
 				continue
 			}
 			fmt.Fprintf(tw, "  %s %s\t%s\t%s\n", lookupAction(ch.Action).symbol, ch.Identifier, p.detail(ch), p.path(ch))
@@ -249,10 +261,10 @@ func (p *Plan) Totals() string {
 
 // counts yields each action in the plan, in the order they're shown, with how
 // many tests it applies to. Unchanged tests are always counted.
-func (p *Plan) counts() func(func(api.SyncTestChangeAction, int) bool) {
-	return func(yield func(api.SyncTestChangeAction, int) bool) {
-		counts := map[api.SyncTestChangeAction]int{api.SyncTestChangeActionUnchanged: 0}
-		order := []api.SyncTestChangeAction{}
+func (p *Plan) counts() func(func(syncAction, int) bool) {
+	return func(yield func(syncAction, int) bool) {
+		counts := map[syncAction]int{actionUnchanged: 0}
+		order := []syncAction{}
 		for _, ch := range p.Changes {
 			if _, ok := counts[ch.Action]; !ok {
 				order = append(order, ch.Action)
@@ -261,7 +273,7 @@ func (p *Plan) counts() func(func(api.SyncTestChangeAction, int) bool) {
 		}
 		// Changes are sorted, so order is too, apart from unchanged, which
 		// is always last.
-		for _, action := range append(order, api.SyncTestChangeActionUnchanged) {
+		for _, action := range append(order, actionUnchanged) {
 			if !yield(action, counts[action]) {
 				return
 			}
