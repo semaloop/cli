@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptrace"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 
@@ -98,9 +100,58 @@ func writeJSON(out io.Writer, v any) {
 
 // SyncClient plans and applies syncs of one directory of test files.
 type SyncClient struct {
-	api   *api.Client
-	dir   string
-	tests []testfile.Test
+	api    *api.Client
+	dir    string
+	tests  []testfile.Test
+	source *Source
+}
+
+// Source is where the test files came from, sent with a sync so the
+// dashboard can link to each test's file.
+type Source struct {
+	// Repository is the repository's web URL.
+	Repository url.URL
+	Commit     string
+	// Root is the repository's directory on disk, which test file paths are
+	// sent relative to.
+	Root string
+}
+
+// GitHubSource is the source of a sync run in GitHub Actions, read from the
+// variables GitHub sets for every workflow run.
+func GitHubSource(getenv func(string) string) (Source, bool) {
+	if getenv("GITHUB_ACTIONS") != "true" {
+		return Source{}, false
+	}
+	server, repo, sha, root := getenv("GITHUB_SERVER_URL"), getenv("GITHUB_REPOSITORY"), getenv("GITHUB_SHA"), getenv("GITHUB_WORKSPACE")
+	if server == "" || repo == "" || sha == "" || root == "" {
+		return Source{}, false
+	}
+	u, err := url.Parse(strings.TrimRight(server, "/") + "/" + repo)
+	if err != nil || u.Scheme != "https" {
+		return Source{}, false
+	}
+	return Source{Repository: *u, Commit: sha, Root: root}, true
+}
+
+// WithSource makes applied syncs send src.
+func (s *SyncClient) WithSource(src Source) *SyncClient {
+	s.source = &src
+	return s
+}
+
+// sourcePath is the test file's path relative to the source's root, with
+// forward slashes, or empty when it's outside the root.
+func (s *SyncClient) sourcePath(t testfile.Test) string {
+	abs, err := filepath.Abs(t.Path)
+	if err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(s.source.Root, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return filepath.ToSlash(rel)
 }
 
 // NewSyncClient returns a client that syncs tests, the checked contents of
@@ -146,8 +197,19 @@ func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.Opt
 	if dryRun {
 		req.DryRun = api.NewOptBool(true)
 	}
+	// A plan changes nothing, so there's nothing to record a source for.
+	sendSource := s.source != nil && !dryRun
+	if sendSource {
+		req.Source = api.NewOptSyncSource(api.SyncSource{Repository: s.source.Repository, Commit: s.source.Commit})
+	}
 	for _, t := range s.tests {
-		req.Tests = append(req.Tests, syncInput(t))
+		in := syncInput(t)
+		if sendSource {
+			if p := s.sourcePath(t); p != "" {
+				in.Path = api.NewOptString(p)
+			}
+		}
+		req.Tests = append(req.Tests, in)
 	}
 
 	// Whether any of the request reached the connection. Until it has, a

@@ -134,7 +134,14 @@ func newSyncClient(path string, out TestOutput) (*icmd.SyncClient, error) {
 		return nil, err
 	}
 	log.Debug("Test files are valid.", "dir", path, "tests", len(tests))
-	return icmd.NewSyncClient(apiKey, client.ServerURL(), path, tests)
+	s, err := icmd.NewSyncClient(apiKey, client.ServerURL(), path, tests)
+	if err != nil {
+		return nil, err
+	}
+	if src, ok := icmd.GitHubSource(os.Getenv); ok {
+		s.WithSource(src)
+	}
+	return s, nil
 }
 
 func syncError(command string, err error) error {

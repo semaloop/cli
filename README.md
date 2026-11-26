@@ -81,6 +81,8 @@ Open the app and sign in with the test account. Check that the home screen shows
 
 `identifier` and `name` are required. Semaloop recognises a test by its `identifier`, so renaming the file is safe but changing `identifier` creates a new test. `secrets` lists secrets by slug. Leaving it out gives a new test the app's default secrets and keeps an existing test's secrets as they are. Leaving out `tags` or `disabled_capabilities` means the test has none.
 
+The [manage tests in code](https://docs.semaloop.com/writing-tests/manage-tests-in-code/) guide covers every field, moving existing tests into code and the dashboard.
+
 - `semaloop test check` checks the files offline, without an API key, and reports every error with its file and line.
 - `semaloop test diff` checks the files and shows what a sync would change, without changing anything. It warns when a test looks renamed, because changing a test's `identifier` loses its history.
 - `semaloop test sync` checks the files, then creates, updates and archives tests in Semaloop to match them. Deleting a file archives its test. In a terminal it shows the plan and asks before applying it, and applies exactly the plan you confirmed: if the app's tests change in the meantime, it shows the new plan and asks again. Pass `--yes` to skip the question. In CI it never asks. `semaloop test sync --dry-run` is the same as `semaloop test diff`.
@@ -147,6 +149,8 @@ jobs:
         with:
           api-key: ${{ secrets.SEMALOOP_API_KEY }}
 ```
+
+When it syncs, it sends the repository, the commit and each test's file, so Semaloop can link each test to its file. A sync run outside GitHub Actions sends none of these.
 
 GitHub doesn't give secrets to pull requests from forks, so for those the action only checks the files and says in the job summary why the plan was skipped. Use `pull_request` rather than `pull_request_target`, which would run with your secrets on a fork's changes. The `concurrency` group stops two syncs running at once.
 

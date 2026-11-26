@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -670,6 +671,76 @@ func TestLoadTestsOnlyWritesErrors(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Errorf("expected no output, got %q", out.String())
+	}
+}
+
+func TestGitHubSource(t *testing.T) {
+	env := map[string]string{
+		"GITHUB_ACTIONS":    "true",
+		"GITHUB_SERVER_URL": "https://github.com",
+		"GITHUB_REPOSITORY": "acme/app",
+		"GITHUB_SHA":        "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+		"GITHUB_WORKSPACE":  "/home/runner/work/app/app",
+	}
+	src, ok := GitHubSource(func(k string) string { return env[k] })
+	if !ok || src.Repository.String() != "https://github.com/acme/app" || src.Commit != env["GITHUB_SHA"] || src.Root != env["GITHUB_WORKSPACE"] {
+		t.Errorf("unexpected source %+v, %v", src, ok)
+	}
+
+	for key, value := range map[string]string{
+		"GITHUB_ACTIONS":    "",
+		"GITHUB_SHA":        "",
+		"GITHUB_SERVER_URL": "http://github.example.com",
+	} {
+		changed := maps.Clone(env)
+		changed[key] = value
+		if _, ok := GitHubSource(func(k string) string { return changed[k] }); ok {
+			t.Errorf("%s=%q: expected no source", key, value)
+		}
+	}
+}
+
+func TestSyncSendsSourceOnlyWhenApplying(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".semaloop", "tests")
+	for name, content := range map[string]string{"smoke/sign-in.md": signInFile, "checkout.md": checkoutFile} {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	srv := newSyncServer(t, ok(fmt.Sprintf(plannedCreate, 7)), ok(fmt.Sprintf(appliedCreate, 8)))
+	repo, _ := url.Parse("https://github.com/acme/app")
+	c := srv.client(dir).WithSource(Source{Repository: *repo, Commit: "a1b2c3d", Root: root})
+
+	if _, err := Sync(context.Background(), c, io.Discard, confirmOptions("y\n", io.Discard)); err != nil {
+		t.Fatal(err)
+	}
+	var plan, apply struct {
+		Source *struct{ Repository, Commit string } `json:"source"`
+		Tests  []struct{ Identifier, Path string }  `json:"tests"`
+	}
+	if err := json.Unmarshal([]byte(srv.requests[0]), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(srv.requests[1]), &apply); err != nil {
+		t.Fatal(err)
+	}
+	if plan.Source != nil || plan.Tests[0].Path != "" {
+		t.Errorf("expected the plan to send no source, got %s", srv.requests[0])
+	}
+	if apply.Source == nil || apply.Source.Repository != "https://github.com/acme/app" || apply.Source.Commit != "a1b2c3d" {
+		t.Errorf("unexpected source in %s", srv.requests[1])
+	}
+	got := map[string]string{}
+	for _, t := range apply.Tests {
+		got[t.Identifier] = t.Path
+	}
+	if want := map[string]string{"sign-in": ".semaloop/tests/smoke/sign-in.md", "checkout": ".semaloop/tests/checkout.md"}; !maps.Equal(got, want) {
+		t.Errorf("got paths %v, want %v", got, want)
 	}
 }
 
