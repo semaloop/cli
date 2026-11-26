@@ -231,7 +231,7 @@ func (p *Plan) WriteText(out io.Writer, opts TextOptions) {
 	fmt.Fprintf(out, "%s → %s %s\n\n", t.bold(p.Dir), t.bold(p.App.Name), t.dim("("+p.App.BundleId+")"))
 
 	if p.HasChanges() {
-		if p.dashboard != nil && p.WantsValues(opts.Full) {
+		if p.dashboard != nil && p.wantsValues(opts.Full) {
 			p.writeValues(out, opts)
 		} else {
 			p.writeTable(out, t)

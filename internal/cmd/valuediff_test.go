@@ -16,10 +16,7 @@ import (
 const longLine = "Open the app and sign in with the test account from the secrets. Go to Settings, then Workspaces, and add a second workspace called Marketing. Switch back to the first workspace, open the search bar, type the word roadmap and press enter. Check that results from every workspace are listed, grouped by workspace name, and that tapping a result from Marketing switches to that workspace and opens the document. Finally, clear the search and check the recent searches list shows roadmap at the top."
 
 func TestDiffTokens(t *testing.T) {
-	edits, ok := diffTokens([]string{"a", "b", "c", "d"}, []string{"a", "x", "c", "y", "d"})
-	if !ok {
-		t.Fatal("expected a diff")
-	}
+	edits := diffTokens([]string{"a", "b", "c", "d"}, []string{"a", "x", "c", "y", "d"}, false)
 	var got []string
 	for _, e := range edits {
 		got = append(got, string("=-+"[e.kind])+e.text)
@@ -47,7 +44,7 @@ func TestTextChangesShowsWordsAroundEdits(t *testing.T) {
 func valueLinesFor(remote DashboardTest, local testfile.Test, ch api.SyncTestChange, opts TextOptions) ([]string, bool) {
 	local.Path, local.Identifier = "t.md", ch.Identifier
 	p := newPlan(".", testApp, []testfile.Test{local}, 1, false, []api.SyncTestChange{ch})
-	return p.WithDashboard([]DashboardTest{remote}).valueLines(ch, opts)
+	return p.setDashboard([]DashboardTest{remote}).valueLines(ch, opts)
 }
 
 // A line that's rewritten is shown removed, then added, cut to the width.
@@ -76,7 +73,7 @@ func TestValueLinesShortensRewrittenLines(t *testing.T) {
 
 func TestTextChangesOnlySpaces(t *testing.T) {
 	rows, _ := textChanges(Theme{}, "Step one.\r\n\n ", "Step one.", TextOptions{})
-	if want := valueIndent + "only spaces at the start or end change"; len(rows) != 1 || rows[0] != want {
+	if want := valueIndent + "only spaces or line endings change"; len(rows) != 1 || rows[0] != want {
 		t.Errorf("got %q", rows)
 	}
 }
@@ -90,9 +87,13 @@ func TestHunkRowsWithManyLines(t *testing.T) {
 		inserted = append(inserted, fmt.Sprintf("Step %d: tap the green button.", i))
 	}
 	deleted[0], inserted[0] = "Something old entirely.", "Brand new words here."
-	rows := hunkRows(Theme{}, deleted, inserted)
-	if want := "…11: tap the [-blue-]{+green+} button."; len(rows) != 13 || rows[12] != want {
-		t.Errorf("got %d rows:\n%s", len(rows), strings.Join(rows, "\n"))
+	rows := hunkRows(Theme{}, deleted, inserted, 0)
+	var texts []string
+	for _, r := range rows {
+		texts = append(texts, r.text)
+	}
+	if want := "…11: tap the [-blue-]{+green+} button."; len(texts) != 13 || texts[12] != want {
+		t.Errorf("got %d rows:\n%s", len(texts), strings.Join(texts, "\n"))
 	}
 }
 
@@ -103,7 +104,7 @@ func TestTextChangesCapsRows(t *testing.T) {
 		to = append(to, fmt.Sprintf("Something else entirely, number %d.", i))
 	}
 	rows, shortened := textChanges(Theme{}, strings.Join(from, "\n"), strings.Join(to, "\n"), TextOptions{})
-	if !shortened || len(rows) != maxValueRows+1 || rows[maxValueRows] != valueIndent+"  … 11 more lines" {
+	if !shortened || len(rows) != maxValueRows+1 || rows[maxValueRows] != valueIndent+"  … 11 more lines (3 removed, 8 added)" {
 		t.Errorf("got (shortened %v):\n%s", shortened, strings.Join(rows, "\n"))
 	}
 	rows, _ = textChanges(Theme{}, strings.Join(from, "\n"), strings.Join(to, "\n"), TextOptions{Full: true})
@@ -182,8 +183,9 @@ func TestDiffWithoutListNamesFields(t *testing.T) {
 	}
 }
 
-// A sync that doesn't ask gets the values it changes before applying.
-func TestSyncShowsValuesFromBeforeApplying(t *testing.T) {
+// A sync that doesn't ask can't know what it changes until it's applied, by
+// when the values it changed from are gone, so it only names the fields.
+func TestSyncWithoutAskingNamesFields(t *testing.T) {
 	srv := newSyncServer(t, ok(updateResult))
 	srv.list = updateList
 	dir := writeTestFiles(t, map[string]string{"sign-in.md": signInFile, "checkout.md": checkoutFile})
@@ -191,8 +193,20 @@ func TestSyncShowsValuesFromBeforeApplying(t *testing.T) {
 	if _, err := Sync(context.Background(), srv.client(dir), &out, SyncOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), `name  "Log in" → "Sign in"`) || !strings.Contains(out.String(), "1 created, 1 updated") {
-		t.Errorf("unexpected output:\n%s", out.String())
+	if srv.lists != 0 || !strings.Contains(out.String(), "  ~ sign-in    name, description, tags, draft   sign-in.md\n") {
+		t.Errorf("unexpected output (lists %d):\n%s", srv.lists, out.String())
+	}
+}
+
+// A change that doesn't fit is cut inside its marks, so it's clear where it
+// ends.
+func TestInlineRowsCutInsideMarks(t *testing.T) {
+	edits, ok := wordDiff("Tap the button to continue.", "Tap the big shiny green button to continue.")
+	if !ok {
+		t.Fatal("expected an edit")
+	}
+	if got, want := inlineRows(Theme{}, edits, 20), "Tap the {+big shi…+}"; len(got) != 1 || got[0] != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 

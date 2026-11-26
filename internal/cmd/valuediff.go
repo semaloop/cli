@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/semaloop/cli/internal/api"
@@ -52,16 +51,16 @@ func (p *Plan) valueChanges() int {
 	return n
 }
 
-// WantsValues reports whether the plan, written with full, would show the
+// wantsValues reports whether the plan, written with full, would show the
 // dashboard's values next to the files', which needs the dashboard's tests.
-func (p *Plan) WantsValues(full bool) bool {
+func (p *Plan) wantsValues(full bool) bool {
 	n := p.valueChanges()
 	return n > 0 && (full || n <= maxShownUpdates)
 }
 
-// WithDashboard gives the plan the dashboard's tests, from before the plan is
+// setDashboard gives the plan the dashboard's tests, from before the plan is
 // applied, so it can show what each changed field changes from.
-func (p *Plan) WithDashboard(tests []DashboardTest) *Plan {
+func (p *Plan) setDashboard(tests []DashboardTest) *Plan {
 	p.dashboard = tests
 	return p
 }
@@ -100,9 +99,13 @@ func (p *Plan) valueLines(ch api.SyncTestChange, opts TextOptions) (out []string
 		case "name":
 			out = append(out, label+"  "+changed(t, strconv.Quote(remote.Name), strconv.Quote(local.Name)))
 		case "folder":
-			out = append(out, label+"  "+changed(t, orNone(remote.Folder), orNone(local.Folder)))
+			out = append(out, label+"  "+changed(t, quoteOr(remote.Folder, "none"), quoteOr(local.Folder, "not set")))
 		case "draft":
-			out = append(out, label+"  "+changed(t, strconv.FormatBool(remote.Draft), strconv.FormatBool(local.Draft != nil && *local.Draft)))
+			to := "not set"
+			if local.Draft != nil {
+				to = strconv.FormatBool(*local.Draft)
+			}
+			out = append(out, label+"  "+changed(t, strconv.FormatBool(remote.Draft), to))
 		case "tags":
 			out = append(out, label+"  "+listChanges(t, remote.Tags, local.Tags))
 		case "secrets":
@@ -134,9 +137,10 @@ func changed(t Theme, from, to string) string {
 	return t.red(from) + " → " + t.green(to)
 }
 
-func orNone(s string) string {
+// quoteOr quotes s, or is unset when s is empty.
+func quoteOr(s, unset string) string {
 	if s == "" {
-		return "none"
+		return unset
 	}
 	return strconv.Quote(s)
 }
@@ -161,29 +165,37 @@ func listChanges(t Theme, from, to []string) string {
 	return strings.Join(parts, " ")
 }
 
+// row is one row of a text's changes, with how many of the text's edited,
+// removed and added lines it shows.
+type row struct {
+	text                      string
+	edited, deleted, inserted int
+}
+
 // textChanges shows how text changes: only the lines that change, and, for a
 // line that's edited rather than rewritten, only the words that change and a
 // few either side. Unless opts asks for it in full, it's cut to a few rows,
 // each no wider than opts allows.
-func textChanges(t Theme, from, to string, opts TextOptions) (rows []string, shortened bool) {
-	a, b := lines(from), lines(to)
-	edits, ok := diffTokens(a, b)
-	if !ok {
-		edits = nil
-		for _, l := range a {
-			edits = append(edits, edit{editDelete, l})
-		}
-		for _, l := range b {
-			edits = append(edits, edit{editInsert, l})
-		}
+func textChanges(t Theme, from, to string, opts TextOptions) (out []string, shortened bool) {
+	width := 0
+	if opts.Width > 0 && !opts.Full {
+		width = max(opts.Width-len(valueIndent), 1)
 	}
-
+	var rows []row
 	var deleted, inserted []string
+	// Lines past the rows that are shown are only counted, and can't be
+	// told apart as edited, so they count as removed and added.
+	var hidden row
 	flush := func() {
-		rows = append(rows, hunkRows(t, deleted, inserted)...)
+		if opts.Full || len(rows) <= maxValueRows {
+			rows = append(rows, hunkRows(t, deleted, inserted, width)...)
+		} else {
+			hidden.deleted += len(deleted)
+			hidden.inserted += len(inserted)
+		}
 		deleted, inserted = nil, nil
 	}
-	for _, e := range edits {
+	for _, e := range diffTokens(lines(from), lines(to), false) {
 		switch e.kind {
 		case editEqual:
 			flush()
@@ -195,26 +207,43 @@ func textChanges(t Theme, from, to string, opts TextOptions) (rows []string, sho
 	}
 	flush()
 	if len(rows) == 0 {
-		// The text only differs in the spaces around it.
-		rows = []string{t.dim("only spaces at the start or end change")}
+		// lines ignores the spaces around the text, and line endings.
+		return []string{valueIndent + t.dim("only spaces or line endings change")}, false
 	}
 
-	if opts.Full {
-		return indent(rows), false
-	}
-	if len(rows) > maxValueRows {
-		hidden := len(rows) - maxValueRows
-		rows = append(rows[:maxValueRows], t.dim(fmt.Sprintf("  … %s", plural(hidden, "more line"))))
+	if !opts.Full && len(rows) > maxValueRows {
+		for _, r := range rows[maxValueRows:] {
+			hidden.edited += r.edited
+			hidden.deleted += r.deleted
+			hidden.inserted += r.inserted
+		}
+		rows = append(rows[:maxValueRows], row{text: t.dim("  … " + hiddenLines(hidden))})
 		shortened = true
 	}
-	return indent(rows), shortened
+	for _, r := range rows {
+		out = append(out, valueIndent+r.text)
+	}
+	return out, shortened
 }
 
-func indent(rows []string) []string {
-	for i, r := range rows {
-		rows[i] = valueIndent + r
+// hiddenLines says how many lines' changes aren't shown, e.g. "3 more lines
+// (1 edited, 2 added)".
+func hiddenLines(r row) string {
+	total := r.edited + r.deleted + r.inserted
+	if total == 0 {
+		// Only the rest of an edited line is hidden.
+		return "more changes to the line above"
 	}
-	return rows
+	var kinds []string
+	for _, k := range []struct {
+		n    int
+		what string
+	}{{r.edited, "edited"}, {r.deleted, "removed"}, {r.inserted, "added"}} {
+		if k.n > 0 {
+			kinds = append(kinds, fmt.Sprintf("%d %s", k.n, k.what))
+		}
+	}
+	return fmt.Sprintf("%s (%s)", plural(total, "more line"), strings.Join(kinds, ", "))
 }
 
 // maxPairings bounds how many pairs of lines hunkRows compares to find the
@@ -224,15 +253,17 @@ const maxPairings = 100
 
 // hunkRows shows lines that are replaced by others. A removed line that's
 // edited into one of the added lines, in the same order, is shown once, with
-// its changed words marked. The rest are shown as removed, then added.
-func hunkRows(t Theme, deleted, inserted []string) []string {
-	var rows, removed []string
+// its changed words marked, in rows no wider than width. The rest are shown
+// as removed, then added.
+func hunkRows(t Theme, deleted, inserted []string, width int) []row {
+	var rows []row
+	var removed []string
 	flush := func(added []string) {
 		for _, l := range removed {
-			rows = append(rows, t.red("- "+l))
+			rows = append(rows, row{text: t.red("- " + l), deleted: 1})
 		}
 		for _, l := range added {
-			rows = append(rows, t.green("+ "+l))
+			rows = append(rows, row{text: t.green("+ " + l), inserted: 1})
 		}
 		removed = nil
 	}
@@ -249,7 +280,13 @@ func hunkRows(t Theme, deleted, inserted []string) []string {
 		for ; k < len(inserted) && (pair || k == max(j, i)); k++ {
 			if edits, ok := wordDiff(d, inserted[k]); ok {
 				flush(inserted[j:k])
-				rows = append(rows, inlineRows(t, edits)...)
+				for n, text := range inlineRows(t, edits, width) {
+					r := row{text: text}
+					if n == 0 {
+						r.edited = 1
+					}
+					rows = append(rows, r)
+				}
 				j, paired = k+1, true
 				break
 			}
@@ -263,8 +300,9 @@ func hunkRows(t Theme, deleted, inserted []string) []string {
 }
 
 // inlineRows shows an edited line one change at a time, each with a few words
-// either side. Changes close together share a row.
-func inlineRows(t Theme, edits []edit) []string {
+// either side, in rows no wider than width, unless it's zero. Changes close
+// together share a row.
+func inlineRows(t Theme, edits []edit, width int) []string {
 	var rows []string
 	for i := 0; i < len(edits); {
 		first := i
@@ -290,33 +328,64 @@ func inlineRows(t Theme, edits []edit) []string {
 			stop--
 		}
 
-		var b strings.Builder
-		if start > 0 {
-			b.WriteString(t.dim("…"))
-		}
-		for k := start; k < stop; {
-			kind, run := edits[k].kind, ""
-			for ; k < stop && edits[k].kind == kind; k++ {
-				run += edits[k].text
-			}
-			switch kind {
-			case editEqual:
-				b.WriteString(run)
-			case editDelete:
-				b.WriteString(t.removed(run))
-			case editInsert:
-				b.WriteString(t.added(run))
+		// Join runs of the same kind, so each change is marked once.
+		var runs []edit
+		for _, e := range edits[start:stop] {
+			if n := len(runs); n > 0 && runs[n-1].kind == e.kind {
+				runs[n-1].text += e.text
+			} else {
+				runs = append(runs, e)
 			}
 		}
-		if stop < len(edits) {
-			b.WriteString(t.dim("…"))
-		}
-		rows = append(rows, b.String())
+		rows = append(rows, renderRuns(t, runs, start > 0, stop < len(edits), width))
 		i = end
 	}
 	return rows
 }
 
-func isSpace(s string) bool {
-	return strings.TrimFunc(s, unicode.IsSpace) == ""
+// renderRuns writes an edited line's runs, with an ellipsis for what's left
+// out at either end. When they're wider than width, the run that doesn't fit
+// is cut short, inside its marks, so it's still clear where a change ends.
+func renderRuns(t Theme, runs []edit, lead, trail bool, width int) string {
+	style := func(kind editKind, s string) string {
+		switch kind {
+		case editDelete:
+			return t.removed(s)
+		case editInsert:
+			return t.added(s)
+		default:
+			return s
+		}
+	}
+	var b strings.Builder
+	left := width
+	if lead {
+		b.WriteString(t.dim("…"))
+		left--
+	}
+	if trail {
+		left--
+	}
+	for _, r := range runs {
+		// Without colours, a change's marks take room too.
+		marks := ansi.StringWidth(style(r.kind, ""))
+		if width == 0 || ansi.StringWidth(r.text)+marks <= left {
+			b.WriteString(style(r.kind, r.text))
+			left -= ansi.StringWidth(r.text) + marks
+			continue
+		}
+		if trail {
+			left++
+		}
+		if room := left - marks; room > 0 {
+			b.WriteString(style(r.kind, ansi.Truncate(r.text, room, "…")))
+		} else {
+			b.WriteString(t.dim("…"))
+		}
+		return b.String()
+	}
+	if trail {
+		b.WriteString(t.dim("…"))
+	}
+	return b.String()
 }

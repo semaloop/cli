@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"strings"
+	"time"
 	"unicode"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 type editKind int
@@ -18,76 +21,88 @@ type edit struct {
 	text string
 }
 
-// maxDiffCells bounds the work diffTokens does, after it trims what the two
-// sides have in common at each end.
-const maxDiffCells = 1 << 18
-
-// diffTokens returns the edits that turn a into b, from their longest common
-// subsequence. Within each run of changes, deletes come before inserts. ok is
-// false when a and b differ too much to diff quickly.
-func diffTokens(a, b []string) (edits []edit, ok bool) {
-	pre := 0
-	for pre < len(a) && pre < len(b) && a[pre] == b[pre] {
-		pre++
-	}
-	suf := 0
-	for suf < len(a)-pre && suf < len(b)-pre && a[len(a)-1-suf] == b[len(b)-1-suf] {
-		suf++
-	}
-	am, bm := a[pre:len(a)-suf], b[pre:len(b)-suf]
-	if (len(am)+1)*(len(bm)+1) > maxDiffCells {
-		return nil, false
-	}
-
-	for _, t := range a[:pre] {
-		edits = append(edits, edit{editEqual, t})
-	}
-	edits = append(edits, lcsEdits(am, bm)...)
-	for _, t := range a[len(a)-suf:] {
-		edits = append(edits, edit{editEqual, t})
-	}
-	return edits, true
+// newDiffer returns a diff-match-patch that gives up on finding the smallest
+// diff quickly, so no description holds up a plan. Its diff is still correct,
+// only longer.
+func newDiffer() *diffmatchpatch.DiffMatchPatch {
+	dmp := diffmatchpatch.New()
+	dmp.DiffTimeout = 100 * time.Millisecond
+	return dmp
 }
 
-func lcsEdits(a, b []string) []edit {
-	n, m := len(a), len(b)
-	w := m + 1
-	// l[i*w+j] is the length of the longest common subsequence of a[i:] and
-	// b[j:].
-	l := make([]int, (n+1)*w)
-	for i := n - 1; i >= 0; i-- {
-		for j := m - 1; j >= 0; j-- {
-			if a[i] == b[j] {
-				l[i*w+j] = l[(i+1)*w+j+1] + 1
-			} else {
-				l[i*w+j] = max(l[(i+1)*w+j], l[i*w+j+1])
+// diffTokens diffs a and b as sequences of tokens, such as lines or words,
+// and returns one edit per run of tokens. With semantic set, it shifts and
+// merges the edits so they read as whole phrases rather than scattered
+// tokens, e.g. [-every workspace-]{+all open workspaces+}.
+func diffTokens(a, b []string, semantic bool) []edit {
+	// diff-match-patch diffs runes, so give each distinct token a rune of its
+	// own.
+	ids := map[string]rune{}
+	var tokens []string
+	encode := func(ts []string) []rune {
+		rs := make([]rune, len(ts))
+		for i, t := range ts {
+			id, ok := ids[t]
+			if !ok {
+				id = rune(len(tokens))
+				ids[t] = id
+				tokens = append(tokens, t)
 			}
+			rs[i] = id
 		}
+		return rs
 	}
+	dmp := newDiffer()
+	diffs := dmp.DiffMainRunes(encode(a), encode(b), false)
 
-	var edits, deletes, inserts []edit
-	flush := func() {
-		edits = append(append(edits, deletes...), inserts...)
-		deletes, inserts = deletes[:0], inserts[:0]
-	}
-	i, j := 0, 0
-	for i < n || j < m {
-		switch {
-		case i < n && j < m && a[i] == b[j]:
-			flush()
-			edits = append(edits, edit{editEqual, a[i]})
-			i++
-			j++
-		case j == m || (i < n && l[(i+1)*w+j] >= l[i*w+j+1]):
-			deletes = append(deletes, edit{editDelete, a[i]})
-			i++
-		default:
-			inserts = append(inserts, edit{editInsert, b[j]})
-			j++
+	var edits []edit
+	for _, d := range diffs {
+		kind := kindOf(d.Type)
+		if semantic {
+			var text strings.Builder
+			for _, id := range d.Text {
+				text.WriteString(tokens[id])
+			}
+			edits = append(edits, edit{kind, text.String()})
+			continue
+		}
+		for _, id := range d.Text {
+			edits = append(edits, edit{kind, tokens[id]})
 		}
 	}
-	flush()
+	if semantic {
+		edits = cleanupSemantic(dmp, edits)
+	}
 	return edits
+}
+
+// ops are the diff-match-patch operations, by editKind.
+var ops = [...]diffmatchpatch.Operation{
+	editEqual:  diffmatchpatch.DiffEqual,
+	editDelete: diffmatchpatch.DiffDelete,
+	editInsert: diffmatchpatch.DiffInsert,
+}
+
+func kindOf(op diffmatchpatch.Operation) editKind {
+	for kind, o := range ops {
+		if o == op {
+			return editKind(kind)
+		}
+	}
+	return editEqual
+}
+
+func cleanupSemantic(dmp *diffmatchpatch.DiffMatchPatch, edits []edit) []edit {
+	diffs := make([]diffmatchpatch.Diff, len(edits))
+	for i, e := range edits {
+		diffs[i] = diffmatchpatch.Diff{Type: ops[e.kind], Text: e.text}
+	}
+	diffs = dmp.DiffCleanupSemantic(diffs)
+	out := make([]edit, len(diffs))
+	for i, d := range diffs {
+		out[i] = edit{kindOf(d.Type), d.Text}
+	}
+	return out
 }
 
 // words splits s into words, runs of spaces, and punctuation, so a diff of
@@ -143,15 +158,17 @@ func lines(text string) []string {
 // mostly rewritten, so a word diff wouldn't help: less than half of the
 // longer version's text is in both.
 func wordDiff(a, b string) (edits []edit, ok bool) {
-	edits, ok = diffTokens(words(a), words(b))
-	if !ok {
-		return nil, false
-	}
-	edits = joinChanges(edits)
 	same := 0
-	for _, e := range edits {
-		if e.kind == editEqual {
-			same += visible(e.text)
+	for _, e := range diffTokens(words(a), words(b), true) {
+		if e.kind != editEqual {
+			edits = append(edits, e)
+			continue
+		}
+		same += visible(e.text)
+		// Split what's unchanged back into words, so a few of them can be
+		// shown either side of a change.
+		for _, w := range words(e.text) {
+			edits = append(edits, edit{editEqual, w})
 		}
 	}
 	if longest := max(visible(a), visible(b)); longest > 0 && same*2 < longest {
@@ -171,41 +188,6 @@ func visible(s string) int {
 	return n
 }
 
-// joinChanges makes the spaces between two changed words part of the change,
-// so replaced words read as one phrase, e.g. [-every workspace-]{+all open
-// workspaces+}, rather than word by word.
-func joinChanges(edits []edit) []edit {
-	var out, deletes, inserts []edit
-	flush := func() {
-		// Spaces both sides of the change share aren't part of it.
-		lead := 0
-		for lead < min(len(deletes), len(inserts)) && deletes[lead].text == inserts[lead].text && isSpace(deletes[lead].text) {
-			out = append(out, edit{editEqual, deletes[lead].text})
-			lead++
-		}
-		deletes, inserts = deletes[lead:], inserts[lead:]
-		var trail []edit
-		for len(deletes) > 0 && len(inserts) > 0 && deletes[len(deletes)-1].text == inserts[len(inserts)-1].text && isSpace(deletes[len(deletes)-1].text) {
-			trail = append([]edit{{editEqual, deletes[len(deletes)-1].text}}, trail...)
-			deletes, inserts = deletes[:len(deletes)-1], inserts[:len(inserts)-1]
-		}
-		out = append(append(append(out, deletes...), inserts...), trail...)
-		deletes, inserts = nil, nil
-	}
-	for i, e := range edits {
-		switch {
-		case e.kind == editDelete:
-			deletes = append(deletes, e)
-		case e.kind == editInsert:
-			inserts = append(inserts, e)
-		case len(deletes)+len(inserts) > 0 && i+1 < len(edits) && edits[i+1].kind != editEqual && strings.TrimSpace(e.text) == "":
-			deletes = append(deletes, edit{editDelete, e.text})
-			inserts = append(inserts, edit{editInsert, e.text})
-		default:
-			flush()
-			out = append(out, e)
-		}
-	}
-	flush()
-	return out
+func isSpace(s string) bool {
+	return strings.TrimFunc(s, unicode.IsSpace) == ""
 }

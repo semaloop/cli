@@ -327,21 +327,19 @@ func errorMessages(errs []api.ErrorResponseErrorsItem) string {
 	return strings.Join(msgs, "; ")
 }
 
-const noDashboard = "Could not get the tests from Semaloop, so only the fields that change are shown."
-
 // withDashboard gives p the dashboard's tests if, written as text, it would
 // show their values. Without them, the plan only names the fields it
 // changes, so failing to get them doesn't fail the command.
 func (s *SyncClient) withDashboard(ctx context.Context, p *Plan, opts TextOptions) {
-	if !p.WantsValues(opts.Full) {
+	if !p.wantsValues(opts.Full) {
 		return
 	}
 	tests, err := listTests(ctx, s.api)
 	if err != nil {
-		log.Warn(noDashboard, "reason", err)
+		log.Warn("Could not get the tests from Semaloop, so only the fields that change are shown.", "reason", err)
 		return
 	}
-	p.WithDashboard(tests)
+	p.setDashboard(tests)
 }
 
 // DiffOptions configures Diff.
@@ -399,17 +397,9 @@ type SyncOptions struct {
 // the new plan and asks again.
 func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (*Plan, error) {
 	if !opts.Confirm {
-		// The values a sync changes from are gone once it's applied, so get
-		// them first: one request, before the sync says what it changes. A
-		// change made in between can make a value shown here out of date,
-		// but the sync itself is unaffected.
-		var before []DashboardTest
-		if !opts.JSON {
-			var err error
-			if before, err = listTests(ctx, s.api); err != nil {
-				log.Debug(noDashboard, "reason", err)
-			}
-		}
+		// The values a sync changes from are gone once it's applied, and
+		// what it changes isn't known until then, so this only names the
+		// fields. `semaloop test diff` shows the values.
 		p, err := s.Apply(ctx, ApplyOptions{AllowArchiveAll: opts.AllowArchiveAll})
 		if err != nil {
 			return nil, err
@@ -417,7 +407,7 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if opts.JSON {
 			p.WriteJSON(out)
 		} else {
-			p.WithDashboard(before).WriteText(out, opts.Text)
+			p.WriteText(out, opts.Text)
 		}
 		return p, nil
 	}

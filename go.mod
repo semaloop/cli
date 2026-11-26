@@ -13,6 +13,7 @@ require (
 	github.com/muesli/termenv v0.16.0
 	github.com/ogen-go/ogen v1.20.2
 	github.com/posener/complete v1.2.3
+	github.com/sergi/go-diff v1.4.5
 	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/term v0.43.0
 	golang.org/x/text v0.37.0

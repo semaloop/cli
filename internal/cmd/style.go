@@ -19,31 +19,31 @@ func NewTheme(r *lipgloss.Renderer) Theme {
 	return Theme{r}
 }
 
-func (t Theme) fg(color string, s string) string {
+// style renders s with the style that with makes, or leaves it as it is
+// without colours.
+func (t Theme) style(s string, with func(lipgloss.Style) lipgloss.Style) string {
 	if t.r == nil || s == "" {
 		return s
 	}
-	return t.r.NewStyle().Foreground(lipgloss.Color(color)).Render(s)
+	return with(t.r.NewStyle()).Render(s)
+}
+
+func foreground(color string) func(lipgloss.Style) lipgloss.Style {
+	return func(st lipgloss.Style) lipgloss.Style { return st.Foreground(lipgloss.Color(color)) }
 }
 
 // The terminal's own basic colours, so the output suits its theme.
-func (t Theme) green(s string) string   { return t.fg("2", s) }
-func (t Theme) yellow(s string) string  { return t.fg("3", s) }
-func (t Theme) red(s string) string     { return t.fg("1", s) }
-func (t Theme) magenta(s string) string { return t.fg("5", s) }
+func (t Theme) green(s string) string   { return t.style(s, foreground("2")) }
+func (t Theme) yellow(s string) string  { return t.style(s, foreground("3")) }
+func (t Theme) red(s string) string     { return t.style(s, foreground("1")) }
+func (t Theme) magenta(s string) string { return t.style(s, foreground("5")) }
 
 func (t Theme) bold(s string) string {
-	if t.r == nil || s == "" {
-		return s
-	}
-	return t.r.NewStyle().Bold(true).Render(s)
+	return t.style(s, func(st lipgloss.Style) lipgloss.Style { return st.Bold(true) })
 }
 
 func (t Theme) dim(s string) string {
-	if t.r == nil || s == "" {
-		return s
-	}
-	return t.r.NewStyle().Faint(true).Render(s)
+	return t.style(s, func(st lipgloss.Style) lipgloss.Style { return st.Faint(true) })
 }
 
 // removed and added mark the words that changed within a line. Without
@@ -52,14 +52,14 @@ func (t Theme) removed(s string) string {
 	if t.r == nil {
 		return "[-" + s + "-]"
 	}
-	return t.r.NewStyle().Foreground(lipgloss.Color("1")).Reverse(true).Render(s)
+	return t.style(s, func(st lipgloss.Style) lipgloss.Style { return foreground("1")(st).Reverse(true) })
 }
 
 func (t Theme) added(s string) string {
 	if t.r == nil {
 		return "{+" + s + "+}"
 	}
-	return t.r.NewStyle().Foreground(lipgloss.Color("2")).Reverse(true).Render(s)
+	return t.style(s, func(st lipgloss.Style) lipgloss.Style { return foreground("2")(st).Reverse(true) })
 }
 
 // action colours text in the colour of action's symbol.
