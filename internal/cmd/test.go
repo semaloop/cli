@@ -327,6 +327,8 @@ func errorMessages(errs []api.ErrorResponseErrorsItem) string {
 	return strings.Join(msgs, "; ")
 }
 
+const noDashboard = "Could not get the tests from Semaloop, so only the fields that change are shown."
+
 // withDashboard gives p the dashboard's tests if, written as text, it would
 // show their values. Without them, the plan only names the fields it
 // changes, so failing to get them doesn't fail the command.
@@ -336,7 +338,7 @@ func (s *SyncClient) withDashboard(ctx context.Context, p *Plan, opts TextOption
 	}
 	tests, err := listTests(ctx, s.api)
 	if err != nil {
-		log.Warn("Could not get the tests from Semaloop, so only the fields that change are shown.", "reason", err)
+		log.Warn(noDashboard, "reason", err)
 		return
 	}
 	p.WithDashboard(tests)
@@ -398,12 +400,14 @@ type SyncOptions struct {
 func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (*Plan, error) {
 	if !opts.Confirm {
 		// The values a sync changes from are gone once it's applied, so get
-		// them first. It's one request, whatever the sync changes.
+		// them first: one request, before the sync says what it changes. A
+		// change made in between can make a value shown here out of date,
+		// but the sync itself is unaffected.
 		var before []DashboardTest
 		if !opts.JSON {
 			var err error
 			if before, err = listTests(ctx, s.api); err != nil {
-				log.Debug("Could not get the tests from Semaloop, so only the fields that change are shown.", "reason", err)
+				log.Debug(noDashboard, "reason", err)
 			}
 		}
 		p, err := s.Apply(ctx, ApplyOptions{AllowArchiveAll: opts.AllowArchiveAll})

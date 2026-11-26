@@ -235,7 +235,9 @@ func (p *Plan) WriteText(out io.Writer, opts TextOptions) {
 			p.writeValues(out, opts)
 		} else {
 			p.writeTable(out, t)
-			if p.dashboard != nil && p.WantsValues(true) {
+			// Once a plan's applied, there's nothing left to see in full.
+			if !p.Applied && !opts.Full && p.valueChanges() > maxShownUpdates {
+				fmt.Fprintln(out)
 				fmt.Fprintln(out, t.dim("Pass --full to see how each test changes."))
 			}
 		}
@@ -253,35 +255,30 @@ func (p *Plan) WriteText(out io.Writer, opts TextOptions) {
 
 // writeTable writes one line per changed test, in aligned columns.
 func (p *Plan) writeTable(out io.Writer, t Theme) {
-	type row struct {
-		ch   api.SyncTestChange
-		cols [3]string
-	}
-	var rows []row
+	var rows [][3]string
 	var widths [3]int
 	for _, ch := range p.Changes {
 		if ch.Action == actionUnchanged {
 			continue
 		}
-		r := row{ch, [3]string{lookupAction(ch.Action).symbol + " " + ch.Identifier, p.detail(Theme{}, ch, true), p.path(ch)}}
-		for i, c := range r.cols {
+		r := [3]string{t.action(ch.Action, lookupAction(ch.Action).symbol+" "+ch.Identifier), p.detail(t, ch, true), t.dim(p.path(ch))}
+		for i, c := range r {
 			widths[i] = max(widths[i], ansi.StringWidth(c))
 		}
 		rows = append(rows, r)
 	}
 	for _, r := range rows {
-		styled := [3]string{t.action(r.ch.Action, r.cols[0]), p.detail(t, r.ch, true), t.dim(r.cols[2])}
 		// Pad every column but the last that has something in it, so a test
 		// without a file has no padding at the end of its line.
-		last := len(r.cols) - 1
-		for last > 0 && r.cols[last] == "" {
+		last := len(r) - 1
+		for last > 0 && r[last] == "" {
 			last--
 		}
 		line := "  "
 		for i := range last + 1 {
-			line += styled[i]
+			line += r[i]
 			if i < last {
-				line += strings.Repeat(" ", widths[i]-ansi.StringWidth(r.cols[i])+3)
+				line += strings.Repeat(" ", widths[i]-ansi.StringWidth(r[i])+3)
 			}
 		}
 		fmt.Fprintln(out, line)
@@ -321,11 +318,7 @@ func (p *Plan) writeValues(out io.Writer, opts TextOptions) {
 	}
 }
 
-// Totals counts the changes, e.g. "1 to create, 2 unchanged.".
-func (p *Plan) Totals() string {
-	return p.totals(Theme{})
-}
-
+// totals counts the changes, e.g. "1 to create, 2 unchanged.".
 func (p *Plan) totals(t Theme) string {
 	if !p.HasChanges() {
 		return fmt.Sprintf("No changes, %d unchanged.", len(p.Changes))

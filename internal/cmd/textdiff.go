@@ -20,7 +20,7 @@ type edit struct {
 
 // maxDiffCells bounds the work diffTokens does, after it trims what the two
 // sides have in common at each end.
-const maxDiffCells = 1 << 20
+const maxDiffCells = 1 << 18
 
 // diffTokens returns the edits that turn a into b, from their longest common
 // subsequence. Within each run of changes, deletes come before inserts. ok is
@@ -128,9 +128,11 @@ func runeClass(r rune) int {
 	}
 }
 
-// lines splits text into its lines. Empty text has none.
+// lines splits text into its lines, ignoring the spaces around it and
+// carriage returns, which a file's description never has. Empty text has
+// none.
 func lines(text string) []string {
-	text = strings.TrimRight(text, "\n")
+	text = strings.TrimSpace(strings.ReplaceAll(text, "\r\n", "\n"))
 	if text == "" {
 		return nil
 	}

@@ -19,9 +19,6 @@ func NewTheme(r *lipgloss.Renderer) Theme {
 	return Theme{r}
 }
 
-// Color reports whether the theme styles anything.
-func (t Theme) Color() bool { return t.r != nil }
-
 func (t Theme) fg(color string, s string) string {
 	if t.r == nil || s == "" {
 		return s

@@ -119,6 +119,14 @@ func (p *Plan) valueLines(ch api.SyncTestChange, opts TextOptions) (out []string
 			out = append(out, label)
 		}
 	}
+	if width := opts.Width; width > 0 && !opts.Full {
+		for i, l := range out {
+			if ansi.StringWidth(l) > width {
+				out[i] = ansi.Truncate(l, width, "…")
+				shortened = true
+			}
+		}
+	}
 	return out, shortened
 }
 
@@ -186,22 +194,18 @@ func textChanges(t Theme, from, to string, opts TextOptions) (rows []string, sho
 		}
 	}
 	flush()
+	if len(rows) == 0 {
+		// The text only differs in the spaces around it.
+		rows = []string{t.dim("only spaces at the start or end change")}
+	}
 
 	if opts.Full {
 		return indent(rows), false
 	}
 	if len(rows) > maxValueRows {
 		hidden := len(rows) - maxValueRows
-		rows = append(rows[:maxValueRows], t.dim(fmt.Sprintf("  … %s", plural(hidden, "more change"))))
+		rows = append(rows[:maxValueRows], t.dim(fmt.Sprintf("  … %s", plural(hidden, "more line"))))
 		shortened = true
-	}
-	if width := opts.Width - len(valueIndent); opts.Width > 0 {
-		for i, r := range rows {
-			if ansi.StringWidth(r) > width {
-				rows[i] = ansi.Truncate(r, max(width, 1), "…")
-				shortened = true
-			}
-		}
 	}
 	return indent(rows), shortened
 }
@@ -214,8 +218,9 @@ func indent(rows []string) []string {
 }
 
 // maxPairings bounds how many pairs of lines hunkRows compares to find the
-// ones that are edited.
-const maxPairings = 400
+// ones that are edited. With more, each line is only compared with the one
+// in its place.
+const maxPairings = 100
 
 // hunkRows shows lines that are replaced by others. A removed line that's
 // edited into one of the added lines, in the same order, is shown once, with
@@ -235,7 +240,13 @@ func hunkRows(t Theme, deleted, inserted []string) []string {
 	j := 0
 	for i, d := range deleted {
 		paired := false
-		for k := j; k < len(inserted) && (pair || k == i); k++ {
+		// Without comparing every pair, compare each line with the one in
+		// its place.
+		k := j
+		if !pair {
+			k = max(j, i)
+		}
+		for ; k < len(inserted) && (pair || k == max(j, i)); k++ {
 			if edits, ok := wordDiff(d, inserted[k]); ok {
 				flush(inserted[j:k])
 				rows = append(rows, inlineRows(t, edits)...)

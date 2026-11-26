@@ -9,6 +9,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+	"github.com/semaloop/cli/internal/api"
+	"github.com/semaloop/cli/internal/testfile"
 )
 
 const longLine = "Open the app and sign in with the test account from the secrets. Go to Settings, then Workspaces, and add a second workspace called Marketing. Switch back to the first workspace, open the search bar, type the word roadmap and press enter. Check that results from every workspace are listed, grouped by workspace name, and that tapping a result from Marketing switches to that workspace and opens the document. Finally, clear the search and check the recent searches list shows roadmap at the top."
@@ -41,21 +43,56 @@ func TestTextChangesShowsWordsAroundEdits(t *testing.T) {
 	}
 }
 
+// valueLinesFor shows how ch changes test from remote.
+func valueLinesFor(remote DashboardTest, local testfile.Test, ch api.SyncTestChange, opts TextOptions) ([]string, bool) {
+	local.Path, local.Identifier = "t.md", ch.Identifier
+	p := newPlan(".", testApp, []testfile.Test{local}, 1, false, []api.SyncTestChange{ch})
+	return p.WithDashboard([]DashboardTest{remote}).valueLines(ch, opts)
+}
+
 // A line that's rewritten is shown removed, then added, cut to the width.
-func TestTextChangesShortensRewrittenLines(t *testing.T) {
+func TestValueLinesShortensRewrittenLines(t *testing.T) {
 	to := "Open the cart and add a product from the recommendations, then tap Checkout and pay with Apple Pay, then check the receipt."
-	rows, shortened := textChanges(Theme{}, longLine, to, TextOptions{Width: 46})
+	ch := api.SyncTestChange{Identifier: "t", Action: actionUpdate, Fields: []string{"name", "description"}, TestId: api.NewNilString("t1")}
+	remote := DashboardTest{ID: "t1", Name: strings.Repeat("Old ", 20), Description: longLine}
+	local := testfile.Test{Name: "New", Description: to}
+
+	lines, shortened := valueLinesFor(remote, local, ch, TextOptions{Width: 46})
 	want := []string{
+		valueIndent + `name  "Old Old Old Old Old Old Old Old …`,
+		valueIndent + "description",
 		valueIndent + "- Open the app and sign in with the tes…",
 		valueIndent + "+ Open the cart and add a product from …",
 	}
-	if !shortened || strings.Join(rows, "\n") != strings.Join(want, "\n") {
-		t.Errorf("got (shortened %v):\n%s\nwant:\n%s", shortened, strings.Join(rows, "\n"), strings.Join(want, "\n"))
+	if !shortened || strings.Join(lines, "\n") != strings.Join(want, "\n") {
+		t.Errorf("got (shortened %v):\n%s\nwant:\n%s", shortened, strings.Join(lines, "\n"), strings.Join(want, "\n"))
 	}
 
-	full, shortened := textChanges(Theme{}, longLine, to, TextOptions{Width: 46, Full: true})
-	if shortened || full[0] != valueIndent+"- "+longLine {
-		t.Errorf("expected the whole line with Full, got %q", full[0])
+	full, shortened := valueLinesFor(remote, local, ch, TextOptions{Width: 46, Full: true})
+	if shortened || full[2] != valueIndent+"- "+longLine {
+		t.Errorf("expected the whole line with Full, got %q", full[2])
+	}
+}
+
+func TestTextChangesOnlySpaces(t *testing.T) {
+	rows, _ := textChanges(Theme{}, "Step one.\r\n\n ", "Step one.", TextOptions{})
+	if want := valueIndent + "only spaces at the start or end change"; len(rows) != 1 || rows[0] != want {
+		t.Errorf("got %q", rows)
+	}
+}
+
+// With too many lines to compare every pair, each is compared with the one
+// in its place, so edited lines still show as edits.
+func TestHunkRowsWithManyLines(t *testing.T) {
+	var deleted, inserted []string
+	for i := range 12 {
+		deleted = append(deleted, fmt.Sprintf("Step %d: tap the blue button.", i))
+		inserted = append(inserted, fmt.Sprintf("Step %d: tap the green button.", i))
+	}
+	deleted[0], inserted[0] = "Something old entirely.", "Brand new words here."
+	rows := hunkRows(Theme{}, deleted, inserted)
+	if want := "…11: tap the [-blue-]{+green+} button."; len(rows) != 13 || rows[12] != want {
+		t.Errorf("got %d rows:\n%s", len(rows), strings.Join(rows, "\n"))
 	}
 }
 
@@ -66,7 +103,7 @@ func TestTextChangesCapsRows(t *testing.T) {
 		to = append(to, fmt.Sprintf("Something else entirely, number %d.", i))
 	}
 	rows, shortened := textChanges(Theme{}, strings.Join(from, "\n"), strings.Join(to, "\n"), TextOptions{})
-	if !shortened || len(rows) != maxValueRows+1 || rows[maxValueRows] != valueIndent+"  … 11 more changes" {
+	if !shortened || len(rows) != maxValueRows+1 || rows[maxValueRows] != valueIndent+"  … 11 more lines" {
 		t.Errorf("got (shortened %v):\n%s", shortened, strings.Join(rows, "\n"))
 	}
 	rows, _ = textChanges(Theme{}, strings.Join(from, "\n"), strings.Join(to, "\n"), TextOptions{Full: true})
@@ -127,7 +164,7 @@ func TestDiffWithManyUpdatesOnlyNamesFields(t *testing.T) {
 	if srv.lists != 0 {
 		t.Errorf("expected no list request, got %d", srv.lists)
 	}
-	if !strings.Contains(out.String(), "  ~ t0   description   t0.md\n") {
+	if !strings.Contains(out.String(), "  ~ t0   description   t0.md\n") || !strings.Contains(out.String(), "Pass --full to see how each test changes.") {
 		t.Errorf("expected one line per test, got:\n%s", out.String())
 	}
 }
@@ -162,7 +199,7 @@ func TestSyncShowsValuesFromBeforeApplying(t *testing.T) {
 func TestThemeColoursOnlyWithColours(t *testing.T) {
 	r := lipgloss.NewRenderer(&bytes.Buffer{})
 	r.SetColorProfile(termenv.Ascii)
-	if NewTheme(r).Color() {
+	if NewTheme(r) != (Theme{}) {
 		t.Error("expected no colours for the Ascii profile")
 	}
 	r.SetColorProfile(termenv.ANSI)
