@@ -1,3 +1,24 @@
+# [1.15.0](https://github.com/semaloop/cli/compare/v1.14.0...v1.15.0) (2026-11-26)
+
+
+### Features
+
+* add test pull and test list ([#29](https://github.com/semaloop/cli/issues/29)) ([0ca00cf](https://github.com/semaloop/cli/commit/0ca00cf725a2408c2d5d8df089450b5919bfc6f3))
+
+# [1.14.0](https://github.com/semaloop/cli/compare/v1.13.0...v1.14.0) (2026-11-26)
+
+
+### Features
+
+* write test files for dashboard tests ([#27](https://github.com/semaloop/cli/issues/27)) ([634d066](https://github.com/semaloop/cli/commit/634d06646575224f69253070306bddc268987159)), closes [#29](https://github.com/semaloop/cli/issues/29)
+
+# [1.13.0](https://github.com/semaloop/cli/compare/v1.12.0...v1.13.0) (2026-11-26)
+
+
+### Features
+
+* add test-sync GitHub Action ([#26](https://github.com/semaloop/cli/issues/26)) ([c49e0d9](https://github.com/semaloop/cli/commit/c49e0d9f19b0ace484614e787b41c38a1cfe4a2c))
+
 # [1.12.0](https://github.com/semaloop/cli/compare/v1.11.0...v1.12.0) (2026-11-26)
 
 
