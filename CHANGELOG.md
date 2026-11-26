@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/semaloop/cli/compare/v1.9.1...v1.10.0) (2026-11-26)
+
+
+### Features
+
+* add shell completion for bash, zsh and fish ([#22](https://github.com/semaloop/cli/issues/22)) ([2e7157f](https://github.com/semaloop/cli/commit/2e7157f9832adae90c0870dbe366b6e3ece442a0))
+
 # [1.10.0](https://github.com/semaloop/cli/compare/v1.9.1...v1.10.0) (2026-11-19)
 
 
