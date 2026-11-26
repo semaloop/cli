@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/semaloop/cli/compare/v1.14.0...v1.15.0) (2026-11-26)
+
+
+### Features
+
+* add test pull and test list ([#29](https://github.com/semaloop/cli/issues/29)) ([0ca00cf](https://github.com/semaloop/cli/commit/0ca00cf725a2408c2d5d8df089450b5919bfc6f3))
+
 # [1.14.0](https://github.com/semaloop/cli/compare/v1.13.0...v1.14.0) (2026-11-26)
 
 
