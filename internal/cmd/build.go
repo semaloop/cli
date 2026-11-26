@@ -95,6 +95,7 @@ func Push(ctx context.Context, apiKey, serverURL, filePath string, opts PushOpti
 	createRes, ok := res.(*api.PostCreateUploadOK)
 	if !ok {
 		if _, unauthorized := res.(*api.ErrorResponse); unauthorized {
+			// The schema's only declared error response for this endpoint is 401.
 			return PushResult{}, client.ErrUnauthorized
 		}
 		return PushResult{}, fmt.Errorf("unexpected response from server (%T)", res)
