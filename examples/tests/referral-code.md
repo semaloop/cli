@@ -1,5 +1,5 @@
 ---
-id: referral-code
+identifier: referral-code
 name: Apply a referral code at checkout
 draft: true
 ---

@@ -93,18 +93,24 @@ func TestCompletionRegisterAnswersTab(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := os.Mkdir(filepath.Join(dir, "MyTests"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	t.Chdir(dir)
 
 	tests := []struct {
 		line string
 		want []string
 	}{
-		{"semaloop ", []string{"auth", "build", "completion"}},
+		{"semaloop ", []string{"auth", "build", "completion", "test"}},
+		{"semaloop test ", []string{"check", "sync"}},
+		{"semaloop test sync --allow", []string{"--allow-archive-all"}},
 		{"semaloop auth lo", []string{"login", "logout"}},
 		{"semaloop completion ", []string{"bash", "fish", "zsh"}},
 		{"semaloop build push --git-r", []string{"--git-ref", "--git-repo"}},
 		// Paths complete only where a path is expected.
-		{"semaloop build push My", []string{"MyApp.apk", "MyApp.ipa"}},
+		{"semaloop build push My", []string{"MyApp.apk", "MyApp.ipa", "MyTests/"}},
+		{"semaloop test check My", []string{"MyTests/"}},
 		{"semaloop completion zsh ", nil},
 	}
 	for _, tt := range tests {

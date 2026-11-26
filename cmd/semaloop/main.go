@@ -33,6 +33,7 @@ type CLI struct {
 	Version kong.VersionFlag `short:"v" help:"Print version."`
 	Auth    AuthCmd          `cmd:"" help:"Manage authentication."`
 	Build   BuildCmd         `cmd:"" help:"Manage builds."`
+	Test    TestCmd          `cmd:"" help:"Manage tests kept as files in your repository."`
 
 	Completion CompletionCmd `cmd:"" help:"Print a shell completion script."`
 }

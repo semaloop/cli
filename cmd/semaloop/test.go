@@ -4,85 +4,70 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
 	"github.com/semaloop/cli/internal/client"
+	icmd "github.com/semaloop/cli/internal/cmd"
 	"github.com/semaloop/cli/internal/config"
-	"github.com/semaloop/cli/internal/testsync"
 )
 
 type TestCmd struct {
-	Sync TestSyncCmd `cmd:"" help:"Sync tests from Markdown files in your repository."`
+	Check TestCheckCmd `cmd:"" help:"Check test files offline and report every error."`
+	Sync  TestSyncCmd  `cmd:"" help:"Make Semaloop's tests in code match the test files."`
 }
 
-// TestSyncCmd makes the app's code-managed tests match a set of Markdown files.
-// Tests created in the web dashboard are never touched.
+// TestCheckCmd checks test files without an API key or any network calls.
+type TestCheckCmd struct {
+	Path string `arg:"" default:".semaloop/tests" help:"Directory of test files, relative to the current directory (default: ${default})." completion-predictor:"dir"`
+}
+
+func (c *TestCheckCmd) Run() error {
+	tests, err := icmd.CheckTests(c.Path, os.Stdout)
+	if err != nil {
+		return err
+	}
+	log.Info("Test files are valid.", "dir", c.Path, "tests", len(tests))
+	return nil
+}
+
+// TestSyncCmd creates, updates and archives the app's tests in code so they
+// match the test files.
 type TestSyncCmd struct {
-	Paths        []string `arg:"" help:"Markdown files or directories (searched recursively) to sync." type:"existingpath"`
-	AllowEmpty   bool     `help:"Allow syncing zero tests, which archives every code-managed test." name:"allow-empty"`
-	BaseRevision *int     `help:"Apply only if the tests are still at this revision, as printed by --dry-run." name:"base-revision"`
+	Path            string `arg:"" default:".semaloop/tests" help:"Directory of test files, relative to the current directory (default: ${default})." completion-predictor:"dir"`
+	AllowArchiveAll bool   `help:"Allow a sync that would archive every test in code, e.g. when the directory is empty." name:"allow-archive-all"`
 }
 
 func (c *TestSyncCmd) Run(g *Globals) error {
-	tests, err := testsync.Load(c.Paths)
-	if err != nil {
-		return fmt.Errorf("invalid test files:\n%w", err)
-	}
-	if len(tests) == 0 && !c.AllowEmpty {
-		return errors.New("no .md files found; pass --allow-empty to archive every code-managed test")
-	}
-	log.Info("Loaded tests.", "count", len(tests))
-
 	apiKey, err := config.APIKey()
 	if err != nil {
 		return fmt.Errorf("could not load configuration: %w", err)
 	}
-	if apiKey == "" {
+	// --dry-run makes no network calls, so it doesn't need an API key.
+	if apiKey == "" && !g.DryRun {
 		return fmt.Errorf("not authenticated, run `semaloop auth login` first")
 	}
 
-	result, err := testsync.Sync(context.Background(), apiKey, client.ServerURL(), tests,
-		testsync.SyncOptions{DryRun: g.DryRun, BaseRevision: c.BaseRevision})
+	_, err = icmd.SyncTests(context.Background(), apiKey, client.ServerURL(), c.Path, os.Stdout, icmd.SyncOptions{
+		DryRun:          g.DryRun,
+		AllowArchiveAll: c.AllowArchiveAll,
+	})
 	if err != nil {
-		if errors.Is(err, client.ErrUnauthorized) {
+		switch {
+		case errors.Is(err, icmd.ErrInvalidTests):
+			return err
+		case errors.Is(err, client.ErrUnauthorized):
 			return fmt.Errorf("invalid API key, run `semaloop auth login` to update it")
+		case errors.Is(err, client.ErrForbidden):
+			return fmt.Errorf("your account does not have permission to sync tests")
+		default:
+			return fmt.Errorf("test sync failed: %w", err)
 		}
-		return err
 	}
 
-	out := io.Writer(os.Stdout)
-	if g.Quiet {
-		out = io.Discard
-	}
-	counts := printPlan(out, tests, result.Changes)
-
-	verb := "Synced tests."
 	if g.DryRun {
-		verb = "Dry run: no changes made."
+		log.Info("Dry run complete. No changes made.")
+	} else {
+		log.Info("Tests synced successfully.", "event", "test_sync_succeeded")
 	}
-	log.Info(verb, "event", "test_sync_succeeded", "revision", result.Revision, "created", counts["create"],
-		"updated", counts["update"], "archived", counts["archive"], "unchanged", counts["unchanged"])
 	return nil
-}
-
-func printPlan(w io.Writer, tests []testsync.Test, changes []testsync.Change) map[string]int {
-	paths := map[string]string{}
-	for _, t := range tests {
-		paths[t.ID] = t.Path
-	}
-	counts := map[string]int{}
-	for _, ch := range changes {
-		counts[ch.Action]++
-		switch ch.Action {
-		case "create":
-			fmt.Fprintf(w, "  + %s (%s)\n", ch.ID, paths[ch.ID])
-		case "update":
-			fmt.Fprintf(w, "  ~ %s: %s (%s)\n", ch.ID, strings.Join(ch.Fields, ", "), paths[ch.ID])
-		case "archive":
-			fmt.Fprintf(w, "  - %s\n", ch.ID)
-		}
-	}
-	return counts
 }

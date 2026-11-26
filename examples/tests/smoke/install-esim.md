@@ -1,5 +1,5 @@
 ---
-id: install-esim
+identifier: install-esim
 name: Buy and install an eSIM
 folder: Smoke
 ---

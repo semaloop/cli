@@ -1,5 +1,5 @@
 ---
-id: sign-in
+identifier: sign-in
 name: Sign in with email
 folder: Smoke
 ---

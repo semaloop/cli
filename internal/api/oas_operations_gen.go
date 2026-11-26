@@ -6,6 +6,8 @@ package api
 type OperationName = string
 
 const (
+	GetListTestsOperation       OperationName = "GetListTests"
 	PostCreateUploadOperation   OperationName = "PostCreateUpload"
 	PostFinalizeUploadOperation OperationName = "PostFinalizeUpload"
+	PostSyncTestsOperation      OperationName = "PostSyncTests"
 )
