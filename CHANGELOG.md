@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/semaloop/cli/compare/v1.11.0...v1.12.0) (2026-11-26)
+
+
+### Features
+
+* add test diff and confirm sync plans before applying ([#25](https://github.com/semaloop/cli/issues/25)) ([b4c1029](https://github.com/semaloop/cli/commit/b4c1029488c285058d51fb96fa206f865778608d))
+
 # [1.11.0](https://github.com/semaloop/cli/compare/v1.10.0...v1.11.0) (2026-11-26)
 
 
