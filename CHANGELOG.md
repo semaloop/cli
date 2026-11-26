@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/semaloop/cli/compare/v1.15.0...v1.16.0) (2026-11-26)
+
+
+### Features
+
+* send where test files came from when syncing in GitHub Actions ([#30](https://github.com/semaloop/cli/issues/30)) ([f80ffe1](https://github.com/semaloop/cli/commit/f80ffe190bf80b472c5e580e9af4a203fe2d50f3))
+
 # [1.15.0](https://github.com/semaloop/cli/compare/v1.14.0...v1.15.0) (2026-11-26)
 
 
