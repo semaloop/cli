@@ -8,6 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	charmlog "github.com/charmbracelet/log"
 	kongcompletion "github.com/jotaen/kong-completion"
+	"github.com/muesli/termenv"
+	icmd "github.com/semaloop/cli/internal/cmd"
 	"github.com/semaloop/cli/internal/version"
 )
 
@@ -22,10 +24,33 @@ func initLogger() *charmlog.Logger {
 }
 
 type Globals struct {
-	Debug  bool `help:"Enable debug logging."`
-	JSON   bool `help:"Output logs as JSON." name:"json"`
-	Quiet  bool `short:"q" help:"Suppress all log output; rely on exit code for status."`
-	DryRun bool `help:"Validate inputs but skip all network calls." name:"dry-run"`
+	Debug  bool   `help:"Enable debug logging."`
+	JSON   bool   `help:"Output logs as JSON." name:"json"`
+	Quiet  bool   `short:"q" help:"Suppress all log output; rely on exit code for status."`
+	DryRun bool   `help:"Validate inputs but skip all network calls." name:"dry-run"`
+	Color  string `enum:"auto,always,never" default:"auto" help:"When to use colours: auto, always or never. Auto uses them in a terminal, unless NO_COLOR is set."`
+}
+
+// colorProfile is the colours to write to r's output with, given --color.
+func (g *Globals) colorProfile(r *lipgloss.Renderer) termenv.Profile {
+	switch g.Color {
+	case "never":
+		return termenv.Ascii
+	case "always":
+		if p := r.ColorProfile(); p != termenv.Ascii {
+			return p
+		}
+		return termenv.ANSI
+	default:
+		return r.ColorProfile()
+	}
+}
+
+// stdoutTheme styles results written to stdout.
+func (g *Globals) stdoutTheme() icmd.Theme {
+	r := lipgloss.NewRenderer(os.Stdout)
+	r.SetColorProfile(g.colorProfile(r))
+	return icmd.NewTheme(r)
 }
 
 type CLI struct {
@@ -55,6 +80,9 @@ func main() {
 	if cli.JSON {
 		log.SetFormatter(charmlog.JSONFormatter)
 		log.SetReportTimestamp(true)
+	}
+	if cli.Color != "auto" {
+		log.SetColorProfile(cli.colorProfile(lipgloss.NewRenderer(os.Stderr)))
 	}
 	if cli.Quiet {
 		log.SetOutput(io.Discard)

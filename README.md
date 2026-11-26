@@ -84,7 +84,7 @@ Open the app and sign in with the test account. Check that the home screen shows
 The [manage tests in code](https://docs.semaloop.com/writing-tests/manage-tests-in-code/) guide covers every field, moving existing tests into code and the dashboard.
 
 - `semaloop test check` checks the files offline, without an API key, and reports every error with its file and line.
-- `semaloop test diff` checks the files and shows what a sync would change, without changing anything. It warns when a test looks renamed, because changing a test's `identifier` loses its history.
+- `semaloop test diff` checks the files and shows what a sync would change, without changing anything. For each test that changes, it shows how each field changes: for a description, only the lines and words that change. Long changes are shortened, and when more than 5 tests change it only names the fields: pass `--full` to see everything. It warns when a test looks renamed, because changing a test's `identifier` loses its history.
 - `semaloop test sync` checks the files, then creates, updates and archives tests in Semaloop to match them. Deleting a file archives its test. In a terminal it shows the plan and asks before applying it, and applies exactly the plan you confirmed: if the app's tests change in the meantime, it shows the new plan and asks again. Pass `--yes` to skip the question. In CI it never asks. `semaloop test sync --dry-run` is the same as `semaloop test diff`.
 - `semaloop test pull` writes a file for each dashboard test that isn't in code yet, with every setting and a `take_over_test_id`, so the next sync moves the test into code and keeps its history. Running it again skips tests that already have a file, unless you pass `--force`. `--folder` and `--test` limit what it writes.
 - `semaloop test list` lists the app's tests. Filter with `--tag`, `--folder`, `--in-code` or `--in-dashboard`.
@@ -92,6 +92,8 @@ The [manage tests in code](https://docs.semaloop.com/writing-tests/manage-tests-
 A sync that would archive every test in code asks you to type the app's name in a terminal. Elsewhere it's refused unless you pass `--allow-archive-all`.
 
 Results go to stdout and logs to stderr. Pass `--output json` for results a program can read.
+
+Output is in colour in a terminal. Set `NO_COLOR`, or pass `--color never`, to turn colours off, or `--color always` to keep them when the output isn't a terminal. Without colours, words that change within a line are marked `[-removed-]{+added+}`.
 
 These commands read `.semaloop/tests` in the current directory by default, so run them from your repository root, or pass the directory of test files.
 

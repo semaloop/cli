@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"text/tabwriter"
 	"unicode"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/semaloop/cli/internal/api"
 	"github.com/semaloop/cli/internal/testfile"
 )
@@ -27,6 +27,8 @@ type Plan struct {
 	Changes []api.SyncTestChange
 
 	tests map[string]testfile.Test
+	// dashboard is the app's tests from before the plan, when they're known.
+	dashboard []DashboardTest
 }
 
 func newPlan(dir string, app api.SyncTestsResponseApp, tests []testfile.Test, revision int, applied bool, changes []api.SyncTestChange) *Plan {
@@ -186,7 +188,9 @@ func (p *Plan) path(ch api.SyncTestChange) string {
 	return t.Path
 }
 
-func (p *Plan) detail(ch api.SyncTestChange) string {
+// detail describes ch. withFields names the fields it changes, for when they
+// aren't shown below it.
+func (p *Plan) detail(t Theme, ch api.SyncTestChange, withFields bool) string {
 	fields := make([]string, len(ch.Fields))
 	for i, f := range ch.Fields {
 		fields[i] = snakeCase(string(f))
@@ -195,11 +199,14 @@ func (p *Plan) detail(ch api.SyncTestChange) string {
 	case actionCreate:
 		return p.name(ch)
 	case actionUpdate:
-		return strings.Join(fields, ", ")
+		if !withFields {
+			return ""
+		}
+		return t.yellow(strings.Join(fields, ", "))
 	case actionTakeOver:
 		d := "take over " + cmp.Or(ch.TestId.Value, "dashboard test")
-		if len(fields) > 0 {
-			d += ": " + strings.Join(fields, ", ")
+		if withFields && len(fields) > 0 {
+			d += ": " + t.yellow(strings.Join(fields, ", "))
 		}
 		return d
 	case actionArchive:
@@ -217,44 +224,119 @@ func (p *Plan) detail(ch api.SyncTestChange) string {
 }
 
 // WriteText writes the plan for a person to read: the directory and app, one
-// line per changed test, any warnings, then totals.
-func (p *Plan) WriteText(out io.Writer) {
-	fmt.Fprintf(out, "%s → %s (%s)\n\n", p.Dir, p.App.Name, p.App.BundleId)
+// line per changed test, any warnings, then totals. When the plan has the
+// dashboard's tests, it shows how each changed field changes under its test.
+func (p *Plan) WriteText(out io.Writer, opts TextOptions) {
+	t := opts.Theme
+	fmt.Fprintf(out, "%s → %s %s\n\n", t.bold(p.Dir), t.bold(p.App.Name), t.dim("("+p.App.BundleId+")"))
 
 	if p.HasChanges() {
-		var b strings.Builder
-		tw := tabwriter.NewWriter(&b, 0, 0, 3, ' ', 0)
-		for _, ch := range p.Changes {
-			if ch.Action == actionUnchanged {
-				continue
+		if p.dashboard != nil && p.WantsValues(opts.Full) {
+			p.writeValues(out, opts)
+		} else {
+			p.writeTable(out, t)
+			if p.dashboard != nil && p.WantsValues(true) {
+				fmt.Fprintln(out, t.dim("Pass --full to see how each test changes."))
 			}
-			fmt.Fprintf(tw, "  %s %s\t%s\t%s\n", lookupAction(ch.Action).symbol, ch.Identifier, p.detail(ch), p.path(ch))
-		}
-		tw.Flush()
-		// A test without a file leaves padding at the end of its line.
-		for line := range strings.Lines(b.String()) {
-			fmt.Fprintln(out, strings.TrimRight(line, " \n"))
 		}
 		fmt.Fprintln(out)
 	}
 
 	for _, w := range p.Warnings() {
-		fmt.Fprintln(out, "Warning: "+w)
+		fmt.Fprintln(out, t.yellow("Warning:")+" "+w)
 	}
 	if !p.Applied && p.ArchivesAll() {
-		fmt.Fprintln(out, "Warning: this archives every test in code. `semaloop test sync` asks you to confirm it, or pass --allow-archive-all where it can't ask.")
+		fmt.Fprintln(out, t.yellow("Warning:")+" this archives every test in code. `semaloop test sync` asks you to confirm it, or pass --allow-archive-all where it can't ask.")
 	}
-	fmt.Fprintln(out, p.Totals())
+	fmt.Fprintln(out, p.totals(t))
+}
+
+// writeTable writes one line per changed test, in aligned columns.
+func (p *Plan) writeTable(out io.Writer, t Theme) {
+	type row struct {
+		ch   api.SyncTestChange
+		cols [3]string
+	}
+	var rows []row
+	var widths [3]int
+	for _, ch := range p.Changes {
+		if ch.Action == actionUnchanged {
+			continue
+		}
+		r := row{ch, [3]string{lookupAction(ch.Action).symbol + " " + ch.Identifier, p.detail(Theme{}, ch, true), p.path(ch)}}
+		for i, c := range r.cols {
+			widths[i] = max(widths[i], ansi.StringWidth(c))
+		}
+		rows = append(rows, r)
+	}
+	for _, r := range rows {
+		styled := [3]string{t.action(r.ch.Action, r.cols[0]), p.detail(t, r.ch, true), t.dim(r.cols[2])}
+		// Pad every column but the last that has something in it, so a test
+		// without a file has no padding at the end of its line.
+		last := len(r.cols) - 1
+		for last > 0 && r.cols[last] == "" {
+			last--
+		}
+		line := "  "
+		for i := range last + 1 {
+			line += styled[i]
+			if i < last {
+				line += strings.Repeat(" ", widths[i]-ansi.StringWidth(r.cols[i])+3)
+			}
+		}
+		fmt.Fprintln(out, line)
+	}
+}
+
+// writeValues writes each changed test, with how each of its fields changes
+// below it and a blank line either side of those.
+func (p *Plan) writeValues(out io.Writer, opts TextOptions) {
+	t := opts.Theme
+	shortened := false
+	first, gap := true, false
+	for _, ch := range p.Changes {
+		if ch.Action == actionUnchanged {
+			continue
+		}
+		values, short := p.valueLines(ch, opts)
+		shortened = shortened || short
+		if gap || (values != nil && !first) {
+			fmt.Fprintln(out)
+		}
+		parts := []string{t.action(ch.Action, lookupAction(ch.Action).symbol+" "+ch.Identifier)}
+		for _, part := range []string{p.detail(t, ch, values == nil), t.dim(p.path(ch))} {
+			if part != "" {
+				parts = append(parts, part)
+			}
+		}
+		fmt.Fprintln(out, "  "+strings.Join(parts, "   "))
+		for _, v := range values {
+			fmt.Fprintln(out, v)
+		}
+		first, gap = false, values != nil
+	}
+	if shortened {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, t.dim("Some changes are shortened. Pass --full to see them in full."))
+	}
 }
 
 // Totals counts the changes, e.g. "1 to create, 2 unchanged.".
 func (p *Plan) Totals() string {
+	return p.totals(Theme{})
+}
+
+func (p *Plan) totals(t Theme) string {
 	if !p.HasChanges() {
 		return fmt.Sprintf("No changes, %d unchanged.", len(p.Changes))
 	}
 	var totals []string
 	for action, n := range p.counts() {
-		totals = append(totals, fmt.Sprintf("%d %s", n, lookupAction(action).label(p.Applied)))
+		total := fmt.Sprintf("%d %s", n, lookupAction(action).label(p.Applied))
+		if action != actionUnchanged {
+			total = t.action(action, total)
+		}
+		totals = append(totals, total)
 	}
 	return strings.Join(totals, ", ") + "."
 }

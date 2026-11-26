@@ -327,10 +327,27 @@ func errorMessages(errs []api.ErrorResponseErrorsItem) string {
 	return strings.Join(msgs, "; ")
 }
 
+// withDashboard gives p the dashboard's tests if, written as text, it would
+// show their values. Without them, the plan only names the fields it
+// changes, so failing to get them doesn't fail the command.
+func (s *SyncClient) withDashboard(ctx context.Context, p *Plan, opts TextOptions) {
+	if !p.WantsValues(opts.Full) {
+		return
+	}
+	tests, err := listTests(ctx, s.api)
+	if err != nil {
+		log.Warn("Could not get the tests from Semaloop, so only the fields that change are shown.", "reason", err)
+		return
+	}
+	p.WithDashboard(tests)
+}
+
 // DiffOptions configures Diff.
 type DiffOptions struct {
 	// JSON writes the plan as JSON.
 	JSON bool
+	// Text configures the plan as text.
+	Text TextOptions
 	// Hint ends a plan with changes by saying how to apply it.
 	Hint bool
 }
@@ -344,7 +361,8 @@ func Diff(ctx context.Context, s *SyncClient, out io.Writer, opts DiffOptions) (
 	if opts.JSON {
 		p.WriteJSON(out)
 	} else {
-		p.WriteText(out)
+		s.withDashboard(ctx, p, opts.Text)
+		p.WriteText(out, opts.Text)
 		if opts.Hint && p.HasChanges() {
 			fmt.Fprintln(out, "Run `semaloop test sync` to apply.")
 		}
@@ -366,6 +384,8 @@ type SyncOptions struct {
 	AllowArchiveAll bool
 	// JSON writes the result as JSON. It can't be used with Confirm.
 	JSON bool
+	// Text configures the plan and result as text.
+	Text TextOptions
 }
 
 // Sync makes the app's tests in code match the files, and writes the result
@@ -377,6 +397,15 @@ type SyncOptions struct {
 // the new plan and asks again.
 func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (*Plan, error) {
 	if !opts.Confirm {
+		// The values a sync changes from are gone once it's applied, so get
+		// them first. It's one request, whatever the sync changes.
+		var before []DashboardTest
+		if !opts.JSON {
+			var err error
+			if before, err = listTests(ctx, s.api); err != nil {
+				log.Debug("Could not get the tests from Semaloop, so only the fields that change are shown.", "reason", err)
+			}
+		}
 		p, err := s.Apply(ctx, ApplyOptions{AllowArchiveAll: opts.AllowArchiveAll})
 		if err != nil {
 			return nil, err
@@ -384,7 +413,7 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if opts.JSON {
 			p.WriteJSON(out)
 		} else {
-			p.WriteText(out)
+			p.WithDashboard(before).WriteText(out, opts.Text)
 		}
 		return p, nil
 	}
@@ -395,7 +424,8 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
-		plan.WriteText(out)
+		s.withDashboard(ctx, plan, opts.Text)
+		plan.WriteText(out, opts.Text)
 		if !plan.HasChanges() {
 			return plan, nil
 		}
@@ -426,7 +456,7 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
-		fmt.Fprintln(out, applied.Totals())
+		fmt.Fprintln(out, applied.totals(opts.Text.Theme))
 		return applied, nil
 	}
 }
