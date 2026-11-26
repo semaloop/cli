@@ -12,6 +12,7 @@ require (
 	github.com/ogen-go/ogen v1.20.2
 	github.com/posener/complete v1.2.3
 	golang.org/x/term v0.43.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
