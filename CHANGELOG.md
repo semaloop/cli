@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/semaloop/cli/compare/v1.13.0...v1.14.0) (2026-11-26)
+
+
+### Features
+
+* write test files for dashboard tests ([#27](https://github.com/semaloop/cli/issues/27)) ([634d066](https://github.com/semaloop/cli/commit/634d06646575224f69253070306bddc268987159)), closes [#29](https://github.com/semaloop/cli/issues/29)
+
 # [1.13.0](https://github.com/semaloop/cli/compare/v1.12.0...v1.13.0) (2026-11-26)
 
 
