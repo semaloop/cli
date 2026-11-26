@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/semaloop/cli/compare/v1.10.0...v1.11.0) (2026-11-26)
+
+
+### Features
+
+* add test check and test sync commands ([#24](https://github.com/semaloop/cli/issues/24)) ([f4a1164](https://github.com/semaloop/cli/commit/f4a11640a5a64c5b3ecbdd52020adaaed643b8c9))
+
 # [1.10.0](https://github.com/semaloop/cli/compare/v1.9.1...v1.10.0) (2026-11-26)
 
 
