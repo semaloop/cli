@@ -2814,6 +2814,12 @@ func (s *SyncTestChange) encodeFields(e *jx.Encoder) {
 		e.Str(s.Identifier)
 	}
 	{
+		if s.Name.Set {
+			e.FieldStart("name")
+			s.Name.Encode(e)
+		}
+	}
+	{
 		if s.TakeOverRedundant.Set {
 			e.FieldStart("takeOverRedundant")
 			s.TakeOverRedundant.Encode(e)
@@ -2825,12 +2831,13 @@ func (s *SyncTestChange) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfSyncTestChange = [5]string{
+var jsonFieldsNameOfSyncTestChange = [6]string{
 	0: "action",
 	1: "fields",
 	2: "identifier",
-	3: "takeOverRedundant",
-	4: "testId",
+	3: "name",
+	4: "takeOverRedundant",
+	5: "testId",
 }
 
 // Decode decodes SyncTestChange from json.
@@ -2885,6 +2892,16 @@ func (s *SyncTestChange) Decode(d *jx.Decoder) error {
 			}(); err != nil {
 				return errors.Wrap(err, "decode field \"identifier\"")
 			}
+		case "name":
+			if err := func() error {
+				s.Name.Reset()
+				if err := s.Name.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"name\"")
+			}
 		case "takeOverRedundant":
 			if err := func() error {
 				s.TakeOverRedundant.Reset()
@@ -2896,7 +2913,7 @@ func (s *SyncTestChange) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"takeOverRedundant\"")
 			}
 		case "testId":
-			requiredBitSet[0] |= 1 << 4
+			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
 				if err := s.TestId.Decode(d); err != nil {
 					return err
@@ -2915,7 +2932,7 @@ func (s *SyncTestChange) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00010101,
+		0b00100101,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -3003,6 +3020,10 @@ func (s *SyncTestsResponse) Encode(e *jx.Encoder) {
 // encodeFields encodes fields.
 func (s *SyncTestsResponse) encodeFields(e *jx.Encoder) {
 	{
+		e.FieldStart("app")
+		s.App.Encode(e)
+	}
+	{
 		e.FieldStart("changes")
 		e.ArrStart()
 		for _, elem := range s.Changes {
@@ -3020,10 +3041,11 @@ func (s *SyncTestsResponse) encodeFields(e *jx.Encoder) {
 	}
 }
 
-var jsonFieldsNameOfSyncTestsResponse = [3]string{
-	0: "changes",
-	1: "revision",
-	2: "success",
+var jsonFieldsNameOfSyncTestsResponse = [4]string{
+	0: "app",
+	1: "changes",
+	2: "revision",
+	3: "success",
 }
 
 // Decode decodes SyncTestsResponse from json.
@@ -3035,8 +3057,18 @@ func (s *SyncTestsResponse) Decode(d *jx.Decoder) error {
 
 	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
 		switch string(k) {
-		case "changes":
+		case "app":
 			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				if err := s.App.Decode(d); err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"app\"")
+			}
+		case "changes":
+			requiredBitSet[0] |= 1 << 1
 			if err := func() error {
 				s.Changes = make([]SyncTestChange, 0)
 				if err := d.Arr(func(d *jx.Decoder) error {
@@ -3054,7 +3086,7 @@ func (s *SyncTestsResponse) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"changes\"")
 			}
 		case "revision":
-			requiredBitSet[0] |= 1 << 1
+			requiredBitSet[0] |= 1 << 2
 			if err := func() error {
 				v, err := d.Int()
 				s.Revision = int(v)
@@ -3066,7 +3098,7 @@ func (s *SyncTestsResponse) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"revision\"")
 			}
 		case "success":
-			requiredBitSet[0] |= 1 << 2
+			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
 				if err := s.Success.Decode(d); err != nil {
 					return err
@@ -3085,7 +3117,7 @@ func (s *SyncTestsResponse) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b00000111,
+		0b00001111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.
@@ -3127,6 +3159,119 @@ func (s *SyncTestsResponse) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements stdjson.Unmarshaler.
 func (s *SyncTestsResponse) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode implements json.Marshaler.
+func (s *SyncTestsResponseApp) Encode(e *jx.Encoder) {
+	e.ObjStart()
+	s.encodeFields(e)
+	e.ObjEnd()
+}
+
+// encodeFields encodes fields.
+func (s *SyncTestsResponseApp) encodeFields(e *jx.Encoder) {
+	{
+		e.FieldStart("bundleId")
+		e.Str(s.BundleId)
+	}
+	{
+		e.FieldStart("name")
+		e.Str(s.Name)
+	}
+}
+
+var jsonFieldsNameOfSyncTestsResponseApp = [2]string{
+	0: "bundleId",
+	1: "name",
+}
+
+// Decode decodes SyncTestsResponseApp from json.
+func (s *SyncTestsResponseApp) Decode(d *jx.Decoder) error {
+	if s == nil {
+		return errors.New("invalid: unable to decode SyncTestsResponseApp to nil")
+	}
+	var requiredBitSet [1]uint8
+
+	if err := d.ObjBytes(func(d *jx.Decoder, k []byte) error {
+		switch string(k) {
+		case "bundleId":
+			requiredBitSet[0] |= 1 << 0
+			if err := func() error {
+				v, err := d.Str()
+				s.BundleId = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"bundleId\"")
+			}
+		case "name":
+			requiredBitSet[0] |= 1 << 1
+			if err := func() error {
+				v, err := d.Str()
+				s.Name = string(v)
+				if err != nil {
+					return err
+				}
+				return nil
+			}(); err != nil {
+				return errors.Wrap(err, "decode field \"name\"")
+			}
+		default:
+			return d.Skip()
+		}
+		return nil
+	}); err != nil {
+		return errors.Wrap(err, "decode SyncTestsResponseApp")
+	}
+	// Validate required fields.
+	var failures []validate.FieldError
+	for i, mask := range [1]uint8{
+		0b00000011,
+	} {
+		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
+			// Mask only required fields and check equality to mask using XOR.
+			//
+			// If XOR result is not zero, result is not equal to expected, so some fields are missed.
+			// Bits of fields which would be set are actually bits of missed fields.
+			missed := bits.OnesCount8(result)
+			for bitN := 0; bitN < missed; bitN++ {
+				bitIdx := bits.TrailingZeros8(result)
+				fieldIdx := i*8 + bitIdx
+				var name string
+				if fieldIdx < len(jsonFieldsNameOfSyncTestsResponseApp) {
+					name = jsonFieldsNameOfSyncTestsResponseApp[fieldIdx]
+				} else {
+					name = strconv.Itoa(fieldIdx)
+				}
+				failures = append(failures, validate.FieldError{
+					Name:  name,
+					Error: validate.ErrFieldRequired,
+				})
+				// Reset bit.
+				result &^= 1 << bitIdx
+			}
+		}
+	}
+	if len(failures) > 0 {
+		return &validate.Error{Fields: failures}
+	}
+
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s *SyncTestsResponseApp) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *SyncTestsResponseApp) UnmarshalJSON(data []byte) error {
 	d := jx.DecodeBytes(data)
 	return s.Decode(d)
 }

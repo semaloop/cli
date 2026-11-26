@@ -62,7 +62,7 @@ func main() {
 	// Skip the banner for `completion`, whose output is sourced by the shell
 	// (and run by Homebrew at install time).
 	if _, ok := ctx.Selected().Target.Addr().Interface().(*CompletionCmd); !ok {
-		log.Info("Running Semaloop CLI", "version", version.Version)
+		log.Debug("Running Semaloop CLI", "version", version.Version)
 	}
 
 	if err := ctx.Run(); err != nil {

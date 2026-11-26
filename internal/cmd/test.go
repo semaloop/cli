@@ -1,17 +1,16 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
-	"net/url"
-	"path/filepath"
-	"slices"
+	"net/http/httptrace"
 	"strings"
-	"unicode"
+	"sync/atomic"
 
 	"github.com/charmbracelet/log"
 	"github.com/semaloop/cli/internal/api"
@@ -23,16 +22,46 @@ import (
 // themselves have already been written out.
 var ErrInvalidTests = errors.New("test files have errors")
 
-// CheckTests loads the test files under dir and writes every error to out, one
-// per line as `file:line: message`. It returns ErrInvalidTests if there were
-// any.
-func CheckTests(dir string, out io.Writer) ([]testfile.Test, error) {
+// ErrConflict is returned when the API answers a sync with a 409: another
+// sync is running, or the app's tests have changed since the plan the sync
+// was based on.
+var ErrConflict = errors.New("sync conflict")
+
+// ErrCancelled is returned when a sync isn't confirmed.
+var ErrCancelled = errors.New("sync cancelled, nothing was changed")
+
+// ErrUnnamedApp is returned when a plan archives every test in code but the
+// API didn't name the app, so there's nothing to ask a person to type.
+var ErrUnnamedApp = errors.New("can't confirm archiving every test in code: Semaloop didn't name the app for your API key, so nothing was changed")
+
+// CheckTests loads the test files under dir and writes every error to out.
+// As text, that's one per line as `file:line: message`. As JSON, it's an
+// object with the number of valid tests and the errors. It returns
+// ErrInvalidTests if there were any.
+func CheckTests(dir string, out io.Writer, asJSON bool) ([]testfile.Test, error) {
+	return loadTests(dir, out, asJSON, true)
+}
+
+// LoadTests is CheckTests for commands with results of their own: it only
+// writes to out when there are errors.
+func LoadTests(dir string, out io.Writer, asJSON bool) ([]testfile.Test, error) {
+	return loadTests(dir, out, asJSON, false)
+}
+
+func loadTests(dir string, out io.Writer, asJSON, always bool) ([]testfile.Test, error) {
 	tests, errs, err := testfile.Load(dir)
 	if err != nil {
 		return nil, err
 	}
-	for _, e := range errs {
-		fmt.Fprintln(out, e.Error())
+	if !always && len(errs) == 0 {
+		return tests, nil
+	}
+	if asJSON {
+		writeCheckJSON(out, tests, errs)
+	} else {
+		for _, e := range errs {
+			fmt.Fprintln(out, e.Error())
+		}
 	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("%w: found %s", ErrInvalidTests, plural(len(errs), "error"))
@@ -40,87 +69,134 @@ func CheckTests(dir string, out io.Writer) ([]testfile.Test, error) {
 	return tests, nil
 }
 
-// SyncOptions configures SyncTests.
-type SyncOptions struct {
-	// DryRun checks the files but makes no network calls.
-	DryRun bool
-	// AllowArchiveAll lets a sync archive every test in code.
+type jsonCheckError struct {
+	Path    string `json:"path"`
+	Line    int    `json:"line"`
+	Message string `json:"message"`
+}
+
+func writeCheckJSON(out io.Writer, tests []testfile.Test, errs []testfile.Error) {
+	res := struct {
+		Tests  int              `json:"tests"`
+		Errors []jsonCheckError `json:"errors"`
+	}{Errors: []jsonCheckError{}}
+	if len(errs) == 0 {
+		res.Tests = len(tests)
+	}
+	for _, e := range errs {
+		res.Errors = append(res.Errors, jsonCheckError{e.Path, e.Line, e.Message})
+	}
+	writeJSON(out, res)
+}
+
+func writeJSON(out io.Writer, v any) {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	// Encoding these types can't fail.
+	_ = enc.Encode(v)
+}
+
+// SyncClient plans and applies syncs of one directory of test files.
+type SyncClient struct {
+	api   *api.Client
+	dir   string
+	tests []testfile.Test
+}
+
+// NewSyncClient returns a client that syncs tests, the checked contents of
+// dir.
+func NewSyncClient(apiKey, serverURL, dir string, tests []testfile.Test) (*SyncClient, error) {
+	c, err := api.NewClient(serverURL, api.WithClient(&client.AuthClient{APIKey: apiKey}))
+	if err != nil {
+		return nil, fmt.Errorf("could not initialise API client: %w", err)
+	}
+	return &SyncClient{api: c, dir: dir, tests: tests}, nil
+}
+
+// Plan asks the API what a sync would change, without changing anything.
+func (s *SyncClient) Plan(ctx context.Context) (*Plan, error) {
+	log.Debug("Planning sync.", "dir", s.dir, "tests", len(s.tests))
+	// A dry run never writes, so allow archiving every test in code. The
+	// plan then shows what would be archived, and the CLI decides whether
+	// the sync needs extra confirmation.
+	return s.post(ctx, true, api.OptInt{}, true)
+}
+
+// ApplyOptions configures SyncClient.Apply.
+type ApplyOptions struct {
+	// BaseRevision, when set, makes the API reject the sync with a 409 if the
+	// app's tests have changed since the plan with this revision.
+	BaseRevision api.OptInt
+	// AllowArchiveAll lets the sync archive every test in code.
 	AllowArchiveAll bool
 }
 
-// SyncResult is the outcome of a sync.
-type SyncResult struct {
-	Revision int
-	Changes  []api.SyncTestChange
+// Apply makes the app's tests in code match the files.
+func (s *SyncClient) Apply(ctx context.Context, opts ApplyOptions) (*Plan, error) {
+	log.Info("Syncing tests.", "dir", s.dir, "tests", len(s.tests))
+	return s.post(ctx, false, opts.BaseRevision, opts.AllowArchiveAll)
 }
 
-// SyncTests checks the test files under dir and, if they pass, makes the
-// app's tests in code match them. Check errors and the applied changes are
-// written to out.
-func SyncTests(ctx context.Context, apiKey, serverURL, dir string, out io.Writer, opts SyncOptions) (SyncResult, error) {
-	tests, err := CheckTests(dir, out)
-	if err != nil {
-		return SyncResult{}, err
-	}
-	log.Debug("Test files are valid.", "dir", dir, "count", len(tests))
-
-	if opts.DryRun {
-		log.Info("Dry run: test files checked; skipping sync.", "dir", dir, "tests", len(tests))
-		return SyncResult{}, nil
-	}
-
-	c, err := api.NewClient(serverURL, api.WithClient(&client.AuthClient{APIKey: apiKey}))
-	if err != nil {
-		return SyncResult{}, fmt.Errorf("could not initialise API client: %w", err)
-	}
-
+func (s *SyncClient) post(ctx context.Context, dryRun bool, baseRevision api.OptInt, allowArchiveAll bool) (*Plan, error) {
 	req := api.PostSyncTestsReq{
-		Tests:           make([]api.ManagedTestInput, 0, len(tests)),
-		AllowArchiveAll: api.NewOptBool(opts.AllowArchiveAll),
+		Tests:           make([]api.ManagedTestInput, 0, len(s.tests)),
+		AllowArchiveAll: api.NewOptBool(allowArchiveAll),
+		BaseRevision:    baseRevision,
 	}
-	for _, t := range tests {
+	if dryRun {
+		req.DryRun = api.NewOptBool(true)
+	}
+	for _, t := range s.tests {
 		req.Tests = append(req.Tests, syncInput(t))
 	}
 
-	log.Info("Syncing tests.", "dir", dir, "tests", len(tests))
-	res, err := c.PostSyncTests(ctx, api.NewOptPostSyncTestsReq(req))
+	// Whether any of the request reached the connection. Until it has, a
+	// failure means the server can't have seen the sync.
+	var sent atomic.Bool
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		WroteHeaders: func() { sent.Store(true) },
+	})
+
+	res, err := s.api.PostSyncTests(ctx, api.NewOptPostSyncTestsReq(req))
 	if err != nil {
 		switch code := statusCode(err); {
 		case code == http.StatusForbidden:
-			return SyncResult{}, client.ErrForbidden
-		case code >= 500:
+			return nil, client.ErrForbidden
+		case code >= 500 && !dryRun:
 			// A server that failed partway may have applied part of the
 			// sync.
-			return SyncResult{}, fmt.Errorf("unexpected response from Semaloop: %d %s, so the sync may have been applied", code, http.StatusText(code))
+			return nil, fmt.Errorf("unexpected response from Semaloop: %d %s, so the sync may have been applied", code, http.StatusText(code))
 		case code != 0:
 			// The server was reached but answered with a status the client
 			// doesn't expect, so this isn't a connection problem.
-			return SyncResult{}, fmt.Errorf("unexpected response from Semaloop: %d %s", code, http.StatusText(code))
+			return nil, fmt.Errorf("unexpected response from Semaloop: %d %s", code, http.StatusText(code))
 		}
-		// net/http reports every transport failure as a *url.Error. Anything
-		// else happened after the server answered, so it may have applied
-		// the sync.
-		if urlErr := (*url.Error)(nil); errors.As(err, &urlErr) {
-			return SyncResult{}, fmt.Errorf("could not connect to Semaloop: %w", err)
+		// A failure before the request was sent, such as a failed dial,
+		// can't have changed anything. Once it's been sent, the server may
+		// have applied the sync before the connection broke, or before an
+		// answer that couldn't be read.
+		if !sent.Load() {
+			return nil, fmt.Errorf("could not connect to Semaloop: %w", err)
 		}
-		return SyncResult{}, fmt.Errorf("could not read the response from Semaloop, so the sync may have been applied: %w", err)
+		if dryRun {
+			return nil, fmt.Errorf("could not get a response from Semaloop: %w", err)
+		}
+		return nil, fmt.Errorf("could not get a response from Semaloop, so the sync may have been applied: %w", err)
 	}
 
 	switch r := res.(type) {
 	case *api.SyncTestsResponse:
-		result := SyncResult{Revision: r.Revision, Changes: r.Changes}
-		writeChanges(out, dir, tests, result.Changes)
-		return result, nil
+		return newPlan(s.dir, r.App, s.tests, r.Revision, !dryRun, r.Changes), nil
 	case *api.PostSyncTestsBadRequest:
-		return SyncResult{}, fmt.Errorf("sync rejected: %s", errorMessages(r.Errors))
+		return nil, fmt.Errorf("sync rejected: %s", errorMessages(r.Errors))
 	case *api.PostSyncTestsForbidden:
-		return SyncResult{}, client.ErrForbidden
+		return nil, client.ErrForbidden
 	case *api.PostSyncTestsConflict:
-		return SyncResult{}, fmt.Errorf("sync conflict: %s", errorMessages(r.Errors))
+		return nil, fmt.Errorf("%w: %s", ErrConflict, errorMessages(r.Errors))
 	case *api.PostSyncTestsUnauthorized:
-		return SyncResult{}, client.ErrUnauthorized
+		return nil, client.ErrUnauthorized
 	default:
-		return SyncResult{}, fmt.Errorf("unexpected response from server (%T)", res)
+		return nil, fmt.Errorf("unexpected response from server (%T)", res)
 	}
 }
 
@@ -189,105 +265,123 @@ func errorMessages(errs []api.ErrorResponseErrorsItem) string {
 	return strings.Join(msgs, "; ")
 }
 
-// syncAction is what a sync does to one test. It's a plain string because
-// the API may add actions that this version of the CLI doesn't know.
-type syncAction = string
-
-const (
-	actionCreate    syncAction = "create"
-	actionUpdate    syncAction = "update"
-	actionTakeOver  syncAction = "take_over"
-	actionArchive   syncAction = "archive"
-	actionUnchanged syncAction = "unchanged"
-)
-
-type changeAction struct {
-	action syncAction
-	symbol string
-	label  string
-}
-
-// actions lists the changes a sync can make, in the order totals are given,
-// with the symbol and label each is shown with.
-var actions = []changeAction{
-	{actionCreate, "+", "created"},
-	{actionUpdate, "~", "updated"},
-	{actionTakeOver, "~", "taken over"},
-	{actionArchive, "-", "archived"},
-}
-
-// lookupAction returns how to show action. An action this version of the CLI
-// doesn't know is shown by its name, so no change goes unreported.
-func lookupAction(action syncAction) changeAction {
-	if i := slices.IndexFunc(actions, func(a changeAction) bool { return a.action == action }); i >= 0 {
-		return actions[i]
+// Diff writes what a sync would change to out, without changing anything.
+func Diff(ctx context.Context, s *SyncClient, out io.Writer, asJSON bool) (*Plan, error) {
+	p, err := s.Plan(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return changeAction{action, "?", strings.ReplaceAll(string(action), "_", " ")}
-}
-
-// writeChanges lists what changed, one test per line, followed by totals.
-// Unchanged tests are only counted.
-func writeChanges(out io.Writer, dir string, tests []testfile.Test, changes []api.SyncTestChange) {
-	paths := map[string]string{}
-	for _, t := range tests {
-		if rel, err := filepath.Rel(dir, t.Path); err == nil {
-			paths[t.Identifier] = rel
+	if asJSON {
+		p.WriteJSON(out)
+	} else {
+		p.WriteText(out)
+		if p.HasChanges() {
+			fmt.Fprintln(out, "Run `semaloop test sync` to apply.")
 		}
 	}
+	return p, nil
+}
 
-	counts := map[syncAction]int{}
-	for _, ch := range changes {
-		counts[ch.Action]++
-		if ch.Action == actionUnchanged {
+// SyncOptions configures Sync.
+type SyncOptions struct {
+	// Confirm makes Sync show the plan and ask before applying it. Otherwise
+	// it applies straight away, in one request.
+	Confirm bool
+	// In is where answers are read from, and Prompt where questions are
+	// written, when Confirm is set.
+	In     io.Reader
+	Prompt io.Writer
+	// AllowArchiveAll lets a sync archive every test in code without being
+	// asked to confirm it.
+	AllowArchiveAll bool
+	// JSON writes the result as JSON. It can't be used with Confirm.
+	JSON bool
+}
+
+// Sync makes the app's tests in code match the files, and writes the result
+// to out.
+//
+// With Confirm set, it plans first, shows the plan and asks before applying.
+// It then applies with the plan's revision as the base, so what's applied is
+// exactly what was confirmed. If another sync has landed in between, it shows
+// the new plan and asks again.
+func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (*Plan, error) {
+	if !opts.Confirm {
+		p, err := s.Apply(ctx, ApplyOptions{AllowArchiveAll: opts.AllowArchiveAll})
+		if err != nil {
+			return nil, err
+		}
+		if opts.JSON {
+			p.WriteJSON(out)
+		} else {
+			p.WriteText(out)
+		}
+		return p, nil
+	}
+
+	in := bufio.NewReader(opts.In)
+	for {
+		plan, err := s.Plan(ctx)
+		if err != nil {
+			return nil, err
+		}
+		plan.WriteText(out)
+		if !plan.HasChanges() {
+			return plan, nil
+		}
+
+		allowArchiveAll := opts.AllowArchiveAll
+		if plan.ArchivesAll() {
+			appName := strings.TrimSpace(plan.App.Name)
+			if appName == "" {
+				return nil, ErrUnnamedApp
+			}
+			if !confirmArchiveAll(in, opts.Prompt, appName) {
+				return nil, ErrCancelled
+			}
+			allowArchiveAll = true
+		} else if !confirm(in, opts.Prompt) {
+			return nil, ErrCancelled
+		}
+
+		applied, err := s.Apply(ctx, ApplyOptions{
+			BaseRevision:    api.NewOptInt(plan.Revision),
+			AllowArchiveAll: allowArchiveAll,
+		})
+		if errors.Is(err, ErrConflict) {
+			log.Warn("The app's tests changed after this plan was made, so nothing was applied. Planning again.", "reason", err)
+			fmt.Fprintln(out)
 			continue
 		}
-		a := lookupAction(ch.Action)
-		detail := a.label
-		if len(ch.Fields) > 0 {
-			names := make([]string, len(ch.Fields))
-			for j, f := range ch.Fields {
-				names[j] = snakeCase(string(f))
-			}
-			detail += ": " + strings.Join(names, ", ")
+		if err != nil {
+			return nil, err
 		}
-		line := fmt.Sprintf("  %s %s  %s", a.symbol, ch.Identifier, detail)
-		if p, ok := paths[ch.Identifier]; ok {
-			line += "  " + p
-		}
-		fmt.Fprintln(out, line)
+		fmt.Fprintln(out, applied.Totals())
+		return applied, nil
 	}
-
-	var totals []string
-	for _, a := range actions {
-		if n := counts[a.action]; n > 0 {
-			totals = append(totals, fmt.Sprintf("%d %s", n, a.label))
-		}
-		delete(counts, a.action)
-	}
-	// Actions this version of the CLI doesn't know, in a stable order.
-	unchanged := counts[actionUnchanged]
-	delete(counts, actionUnchanged)
-	for _, action := range slices.Sorted(maps.Keys(counts)) {
-		totals = append(totals, fmt.Sprintf("%d %s", counts[action], lookupAction(action).label))
-	}
-	totals = append(totals, fmt.Sprintf("%d unchanged", unchanged))
-	fmt.Fprintln(out, strings.Join(totals, ", ")+".")
 }
 
-// snakeCase turns the API's camelCase field names into the files' snake_case
-// ones, e.g. disabledCapabilities into disabled_capabilities.
-func snakeCase(s string) string {
-	var b strings.Builder
-	for i, r := range s {
-		if unicode.IsUpper(r) {
-			if i > 0 {
-				b.WriteByte('_')
-			}
-			r = unicode.ToLower(r)
-		}
-		b.WriteRune(r)
+func confirm(in *bufio.Reader, prompt io.Writer) bool {
+	fmt.Fprint(prompt, "Apply these changes? [y/N] ")
+	answer := strings.ToLower(readLine(in))
+	return answer == "y" || answer == "yes"
+}
+
+// confirmArchiveAll asks for the app's name, exactly, so archiving a whole
+// suite can't be confirmed by habit or against the wrong app.
+func confirmArchiveAll(in *bufio.Reader, prompt io.Writer, appName string) bool {
+	fmt.Fprintf(prompt, "This archives every test in code for %s. Type the app's name to confirm: ", appName)
+	return readLine(in) == appName
+}
+
+// readLine reads one answer. An error, such as the end of the input, reads as
+// an empty answer, which never confirms anything.
+func readLine(in *bufio.Reader) string {
+	line, err := in.ReadString('\n')
+	if err != nil && line == "" {
+		return ""
 	}
-	return b.String()
+	return strings.TrimSpace(line)
 }
 
 func plural(n int, word string) string {

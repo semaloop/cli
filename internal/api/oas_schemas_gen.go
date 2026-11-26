@@ -1172,6 +1172,8 @@ type SyncTestChange struct {
 	Fields []string `json:"fields"`
 	// The test's identifier in code.
 	Identifier string `json:"identifier"`
+	// The test's name, for an archive, which has no file to read it from.
+	Name OptString `json:"name"`
 	// `takeOverTestId` names the test already in code under this identifier, so it can be removed.
 	TakeOverRedundant OptSyncTestChangeTakeOverRedundant `json:"takeOverRedundant"`
 	// The Semaloop test ID; null for a create on a dry run.
@@ -1191,6 +1193,11 @@ func (s *SyncTestChange) GetFields() []string {
 // GetIdentifier returns the value of Identifier.
 func (s *SyncTestChange) GetIdentifier() string {
 	return s.Identifier
+}
+
+// GetName returns the value of Name.
+func (s *SyncTestChange) GetName() OptString {
+	return s.Name
 }
 
 // GetTakeOverRedundant returns the value of TakeOverRedundant.
@@ -1216,6 +1223,11 @@ func (s *SyncTestChange) SetFields(val []string) {
 // SetIdentifier sets the value of Identifier.
 func (s *SyncTestChange) SetIdentifier(val string) {
 	s.Identifier = val
+}
+
+// SetName sets the value of Name.
+func (s *SyncTestChange) SetName(val OptString) {
+	s.Name = val
 }
 
 // SetTakeOverRedundant sets the value of TakeOverRedundant.
@@ -1244,10 +1256,17 @@ func (SyncTestChangeTakeOverRedundant) AllValues() []SyncTestChangeTakeOverRedun
 
 // Ref: #/components/schemas/SyncTestsResponse
 type SyncTestsResponse struct {
-	Changes []SyncTestChange `json:"changes"`
+	// The app the API key belongs to, whose tests are synced.
+	App     SyncTestsResponseApp `json:"app"`
+	Changes []SyncTestChange     `json:"changes"`
 	// The tests' revision after this sync, or now for a dry run.
 	Revision int                      `json:"revision"`
 	Success  SyncTestsResponseSuccess `json:"success"`
+}
+
+// GetApp returns the value of App.
+func (s *SyncTestsResponse) GetApp() SyncTestsResponseApp {
+	return s.App
 }
 
 // GetChanges returns the value of Changes.
@@ -1263,6 +1282,11 @@ func (s *SyncTestsResponse) GetRevision() int {
 // GetSuccess returns the value of Success.
 func (s *SyncTestsResponse) GetSuccess() SyncTestsResponseSuccess {
 	return s.Success
+}
+
+// SetApp sets the value of App.
+func (s *SyncTestsResponse) SetApp(val SyncTestsResponseApp) {
+	s.App = val
 }
 
 // SetChanges sets the value of Changes.
@@ -1281,6 +1305,32 @@ func (s *SyncTestsResponse) SetSuccess(val SyncTestsResponseSuccess) {
 }
 
 func (*SyncTestsResponse) postSyncTestsRes() {}
+
+// The app the API key belongs to, whose tests are synced.
+type SyncTestsResponseApp struct {
+	BundleId string `json:"bundleId"`
+	Name     string `json:"name"`
+}
+
+// GetBundleId returns the value of BundleId.
+func (s *SyncTestsResponseApp) GetBundleId() string {
+	return s.BundleId
+}
+
+// GetName returns the value of Name.
+func (s *SyncTestsResponseApp) GetName() string {
+	return s.Name
+}
+
+// SetBundleId sets the value of BundleId.
+func (s *SyncTestsResponseApp) SetBundleId(val string) {
+	s.BundleId = val
+}
+
+// SetName sets the value of Name.
+func (s *SyncTestsResponseApp) SetName(val string) {
+	s.Name = val
+}
 
 type SyncTestsResponseSuccess bool
 

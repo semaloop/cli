@@ -82,9 +82,14 @@ Open the app and sign in with the test account. Check that the home screen shows
 `identifier` and `name` are required. Semaloop recognises a test by its `identifier`, so renaming the file is safe but changing `identifier` creates a new test. `secrets` lists secrets by slug. Leaving it out gives a new test the app's default secrets and keeps an existing test's secrets as they are. Leaving out `tags` or `disabled_capabilities` means the test has none.
 
 - `semaloop test check` checks the files offline, without an API key, and reports every error with its file and line.
-- `semaloop test sync` checks the files, then creates, updates and archives tests in Semaloop to match them. Deleting a file archives its test. A sync that would archive every test in code is refused unless you pass `--allow-archive-all`.
+- `semaloop test diff` checks the files and shows what a sync would change, without changing anything. It warns when a test looks renamed, because changing a test's `identifier` loses its history.
+- `semaloop test sync` checks the files, then creates, updates and archives tests in Semaloop to match them. Deleting a file archives its test. In a terminal it shows the plan and asks before applying it, and applies exactly the plan you confirmed: if the app's tests change in the meantime, it shows the new plan and asks again. Pass `--yes` to skip the question. In CI it never asks. `semaloop test sync --dry-run` is the same as `semaloop test diff`.
 
-Both commands read `.semaloop/tests` in the current directory by default, so run them from your repository root, or pass the directory of test files.
+A sync that would archive every test in code asks you to type the app's name in a terminal. Elsewhere it's refused unless you pass `--allow-archive-all`.
+
+Results go to stdout and logs to stderr. Pass `--output json` for results a program can read.
+
+These commands read `.semaloop/tests` in the current directory by default, so run them from your repository root, or pass the directory of test files.
 
 ## GitHub Actions
 

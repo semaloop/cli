@@ -103,7 +103,7 @@ func TestCompletionRegisterAnswersTab(t *testing.T) {
 		want []string
 	}{
 		{"semaloop ", []string{"auth", "build", "completion", "test"}},
-		{"semaloop test ", []string{"check", "sync"}},
+		{"semaloop test ", []string{"check", "diff", "sync"}},
 		{"semaloop test sync --allow", []string{"--allow-archive-all"}},
 		{"semaloop auth lo", []string{"login", "logout"}},
 		{"semaloop completion ", []string{"bash", "fish", "zsh"}},
