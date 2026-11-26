@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: 'Semaloop: sync tests'
+description: 'Keep Semaloop tests in sync with the Markdown test files in your repository'
+author: 'Semaloop'
+
+inputs:
+  api-key:
+    description: >
+      Semaloop API key. Store this as a repository or organization secret.
+      GitHub doesn't give secrets to pull requests from forks, so without it
+      the action only checks the files.
+    required: false
+    default: ''
+  path:
+    description: 'Directory of test files, relative to the repository root.'
+    required: false
+    default: '.semaloop/tests'
+  version:
+    description: 'Version of the semaloop CLI to install, e.g. "1.6.0". Defaults to the latest release.'
+    required: false
+    default: 'latest'
+  allow-archive-all:
+    description: 'Allow a sync that would archive every test in code, e.g. when the directory is empty.'
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Mask API key
+      # Registers the key with the runner's log redaction via the ::add-mask::
+      # workflow command, so it's replaced with *** in any step output below.
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#masking-a-value-in-a-log
+      if: inputs.api-key != ''
+      shell: bash
+      env:
+        API_KEY: ${{ inputs.api-key }}
+      run: echo "::add-mask::$API_KEY"
+
+    - name: Install semaloop CLI
+      shell: bash
+      env:
+        SEMALOOP_VERSION: ${{ inputs.version }}
+        SEMALOOP_ACTION: test-sync
+      run: bash "$GITHUB_ACTION_PATH/../install-cli.sh"
+
+    - name: Sync tests
+      shell: bash
+      env:
+        SEMALOOP_API_KEY: ${{ inputs.api-key }}
+        TESTS_PATH: ${{ inputs.path }}
+        ALLOW_ARCHIVE_ALL: ${{ inputs.allow-archive-all }}
+        EVENT_NAME: ${{ github.event_name }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh"
