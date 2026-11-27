@@ -402,19 +402,16 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
-		plan.removingTakeOvers = opts.RemoveTakeOvers
-		plan.WriteText(out)
 		if !plan.HasChanges() {
 			// A test already in code doesn't need its take_over_test_id,
 			// even with nothing to apply.
 			if opts.RemoveTakeOvers {
 				plan.RemoveTakeOvers()
-				if r := plan.removedText(); r != "" {
-					fmt.Fprintln(out, r)
-				}
 			}
+			plan.WriteText(out)
 			return plan, nil
 		}
+		plan.WriteText(out)
 
 		allowArchiveAll := opts.AllowArchiveAll
 		if plan.ArchivesAll() {
@@ -442,13 +439,13 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
-		fmt.Fprintln(out, applied.Totals())
 		if opts.RemoveTakeOvers {
 			applied.RemoveTakeOvers()
 			if r := applied.removedText(); r != "" {
 				fmt.Fprintln(out, r)
 			}
 		}
+		fmt.Fprintln(out, applied.Totals())
 		return applied, nil
 	}
 }

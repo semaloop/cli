@@ -33,10 +33,6 @@ type Plan struct {
 	RemovedTakeOvers []string
 
 	tests map[string]testfile.Test
-	// removingTakeOvers is set when take_over_test_id will be removed from
-	// files that no longer need it once the plan is applied, so there's no
-	// need to warn about them.
-	removingTakeOvers bool
 }
 
 func newPlan(dir string, app api.SyncTestsResponseApp, tests []testfile.Test, revision int, applied bool, changes []api.SyncTestChange) *Plan {
@@ -165,28 +161,26 @@ func (p *Plan) Warnings() []string {
 				ch.Identifier, id))
 		}
 	}
-	if !p.removingTakeOvers {
-		var redundant []api.SyncTestChange
-		for _, ch := range p.Changes {
-			if bool(ch.TakeOverRedundant.Value) && !slices.Contains(p.RemovedTakeOvers, p.path(ch)) {
-				redundant = append(redundant, ch)
-			}
+	var redundant []api.SyncTestChange
+	for _, ch := range p.Changes {
+		if bool(ch.TakeOverRedundant.Value) && !slices.Contains(p.RemovedTakeOvers, p.path(ch)) {
+			redundant = append(redundant, ch)
 		}
-		switch len(redundant) {
-		case 0:
-		case 1:
-			warnings = append(warnings, fmt.Sprintf(
-				"%s is already in code, so take_over_test_id can be removed from %s.",
-				redundant[0].Identifier, cmp.Or(p.path(redundant[0]), "its file")))
-		default:
-			paths := make([]string, len(redundant))
-			for i, ch := range redundant {
-				paths[i] = cmp.Or(p.path(ch), ch.Identifier)
-			}
-			warnings = append(warnings, fmt.Sprintf(
-				"%d tests are already in code, so take_over_test_id can be removed from their files: %s.",
-				len(redundant), strings.Join(paths, ", ")))
+	}
+	switch len(redundant) {
+	case 0:
+	case 1:
+		warnings = append(warnings, fmt.Sprintf(
+			"%s is already in code, so take_over_test_id can be removed from %s.",
+			redundant[0].Identifier, cmp.Or(p.path(redundant[0]), "its file")))
+	default:
+		paths := make([]string, len(redundant))
+		for i, ch := range redundant {
+			paths[i] = cmp.Or(p.path(ch), ch.Identifier)
 		}
+		warnings = append(warnings, fmt.Sprintf(
+			"%d tests are already in code, so take_over_test_id can be removed from their files: %s.",
+			len(redundant), strings.Join(paths, ", ")))
 	}
 	return warnings
 }
@@ -210,7 +204,6 @@ func (p *Plan) doneTakeOvers() []testfile.Test {
 // is logged and left as it is: the field does no harm, so the sync has still
 // succeeded.
 func (p *Plan) RemoveTakeOvers() {
-	p.removingTakeOvers = false
 	for _, t := range p.doneTakeOvers() {
 		if err := removeTakeOver(t); err != nil {
 			log.Warn("Could not remove take_over_test_id, which is no longer needed.", "path", t.Path, "reason", err)

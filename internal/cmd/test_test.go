@@ -791,11 +791,8 @@ func TestSyncRemovesTakeOversOnceDone(t *testing.T) {
 	if got, want := p.RemovedTakeOvers, []string{"sign-in.md", "checkout.md"}; !slices.Equal(got, want) {
 		t.Errorf("got removed %q, want %q", got, want)
 	}
-	if strings.Contains(out.String(), "Warning") {
-		t.Errorf("expected no warnings about take overs being removed anyway, got:\n%s", out.String())
-	}
-	if !strings.HasSuffix(out.String(), "1 taken over, 1 unchanged.\nRemoved take_over_test_id from 2 files, as their tests are now in code: sign-in.md, checkout.md. Commit the change.\n") {
-		t.Errorf("expected the totals and then the removed files, got:\n%s", out.String())
+	if !strings.HasSuffix(out.String(), "Removed take_over_test_id from 2 files, as their tests are now in code: sign-in.md, checkout.md. Commit the change.\n1 taken over, 1 unchanged.\n") {
+		t.Errorf("expected the removed files and then the totals, got:\n%s", out.String())
 	}
 }
 
@@ -812,8 +809,29 @@ func TestSyncRemovesRedundantTakeOversWithoutChanges(t *testing.T) {
 	if readFile(t, filepath.Join(dir, "checkout.md")) != checkoutFile {
 		t.Errorf("take_over_test_id wasn't removed:\n%s", readFile(t, filepath.Join(dir, "checkout.md")))
 	}
-	if !strings.HasSuffix(out.String(), "No changes, 1 unchanged.\nRemoved take_over_test_id from checkout.md, as its test is now in code. Commit the change.\n") {
+	if strings.Contains(out.String(), "Warning") {
+		t.Errorf("expected no warning about a take over that was removed, got:\n%s", out.String())
+	}
+	if !strings.HasSuffix(out.String(), "Removed take_over_test_id from checkout.md, as its test is now in code. Commit the change.\nNo changes, 1 unchanged.\n") {
 		t.Errorf("unexpected output:\n%s", out.String())
+	}
+}
+
+func TestSyncCancelledWarnsAboutRedundantTakeOvers(t *testing.T) {
+	srv := newSyncServer(t, ok(fmt.Sprintf(plannedTakeOver, 7)))
+	dir := writeTestFiles(t, map[string]string{"sign-in.md": signInFile, "checkout.md": checkoutTakenOverFile})
+
+	opts := confirmOptions("n\n", io.Discard)
+	opts.RemoveTakeOvers = true
+	var out bytes.Buffer
+	if _, err := Sync(context.Background(), srv.client(dir), &out, opts); !errors.Is(err, ErrCancelled) {
+		t.Fatalf("expected ErrCancelled, got %v", err)
+	}
+	if !strings.Contains(out.String(), "Warning: checkout is already in code, so take_over_test_id can be removed from checkout.md.") {
+		t.Errorf("expected a warning about checkout.md, got:\n%s", out.String())
+	}
+	if readFile(t, filepath.Join(dir, "checkout.md")) != checkoutTakenOverFile {
+		t.Errorf("expected checkout.md to be left alone when cancelled, got:\n%s", readFile(t, filepath.Join(dir, "checkout.md")))
 	}
 }
 
