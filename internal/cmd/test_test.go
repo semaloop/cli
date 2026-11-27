@@ -108,6 +108,10 @@ type syncServer struct {
 	t         *testing.T
 	responses []syncResponse
 	requests  []string
+	// list answers requests for the app's tests. Without it, they get a
+	// 404, as from a server that can't list them.
+	list  string
+	lists int
 }
 
 type syncResponse struct {
@@ -121,6 +125,15 @@ func newSyncServer(t *testing.T, responses ...syncResponse) *syncServer {
 	t.Helper()
 	s := &syncServer{t: t, responses: responses}
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/tests" && r.Method == http.MethodGet {
+			s.lists++
+			if s.list == "" {
+				jsonResponse(w, http.StatusNotFound, `{"errors":[]}`)
+				return
+			}
+			jsonResponse(w, http.StatusOK, s.list)
+			return
+		}
 		if r.URL.Path != "/api/v1/tests/sync" {
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
@@ -606,6 +619,10 @@ func TestSyncConnectionClosedAfterRequestMayHaveApplied(t *testing.T) {
 	// closes the connection without answering.
 	received := make(chan string, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tests/sync" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		body, _ := io.ReadAll(r.Body)
 		received <- string(body)
 		conn, _, err := w.(http.Hijacker).Hijack()
@@ -651,7 +668,7 @@ func TestWriteTextShowsUnknownActions(t *testing.T) {
 		{Identifier: "a", Action: "restore"},
 		{Identifier: "b", Action: actionCreate},
 		{Identifier: "c", Action: "soft_delete"},
-	}).WriteText(&out)
+	}).WriteText(&out, TextOptions{})
 	want := ". → Sim Shop (com.example.simshop)\n\n" +
 		"  + b   B             b.md\n" +
 		"  ? a   restore\n" +

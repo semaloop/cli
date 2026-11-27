@@ -19,6 +19,10 @@ func FetchTests(ctx context.Context, apiKey, serverURL string) ([]DashboardTest,
 	if err != nil {
 		return nil, fmt.Errorf("could not initialise API client: %w", err)
 	}
+	return listTests(ctx, c)
+}
+
+func listTests(ctx context.Context, c *api.Client) ([]DashboardTest, error) {
 	res, err := c.GetListTests(ctx)
 	if err != nil {
 		switch code := statusCode(err); {
