@@ -327,10 +327,27 @@ func errorMessages(errs []api.ErrorResponseErrorsItem) string {
 	return strings.Join(msgs, "; ")
 }
 
+// withDashboard gives p the dashboard's tests if, written as text, it would
+// show their values. Without them, the plan only names the fields it
+// changes, so failing to get them doesn't fail the command.
+func (s *SyncClient) withDashboard(ctx context.Context, p *Plan, opts TextOptions) {
+	if !p.wantsValues(opts.Full) {
+		return
+	}
+	tests, err := listTests(ctx, s.api)
+	if err != nil {
+		log.Warn("Could not get the tests from Semaloop, so only the fields that change are shown.", "reason", err)
+		return
+	}
+	p.setDashboard(tests)
+}
+
 // DiffOptions configures Diff.
 type DiffOptions struct {
 	// JSON writes the plan as JSON.
 	JSON bool
+	// Text configures the plan as text.
+	Text TextOptions
 	// Hint ends a plan with changes by saying how to apply it.
 	Hint bool
 }
@@ -344,7 +361,8 @@ func Diff(ctx context.Context, s *SyncClient, out io.Writer, opts DiffOptions) (
 	if opts.JSON {
 		p.WriteJSON(out)
 	} else {
-		p.WriteText(out)
+		s.withDashboard(ctx, p, opts.Text)
+		p.WriteText(out, opts.Text)
 		if opts.Hint && p.HasChanges() {
 			fmt.Fprintln(out, "Run `semaloop test sync` to apply.")
 		}
@@ -366,6 +384,8 @@ type SyncOptions struct {
 	AllowArchiveAll bool
 	// JSON writes the result as JSON. It can't be used with Confirm.
 	JSON bool
+	// Text configures the plan and result as text.
+	Text TextOptions
 	// RemoveTakeOvers removes take_over_test_id from the files that no
 	// longer need it once the sync succeeds. Only set it where the changed
 	// files can be committed, not in CI.
@@ -381,6 +401,9 @@ type SyncOptions struct {
 // the new plan and asks again.
 func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (*Plan, error) {
 	if !opts.Confirm {
+		// The values a sync changes from are gone once it's applied, and
+		// what it changes isn't known until then, so this only names the
+		// fields. `semaloop test diff` shows the values.
 		p, err := s.Apply(ctx, ApplyOptions{AllowArchiveAll: opts.AllowArchiveAll})
 		if err != nil {
 			return nil, err
@@ -391,7 +414,7 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if opts.JSON {
 			p.WriteJSON(out)
 		} else {
-			p.WriteText(out)
+			p.WriteText(out, opts.Text)
 		}
 		return p, nil
 	}
@@ -402,16 +425,17 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
+		s.withDashboard(ctx, plan, opts.Text)
 		if !plan.HasChanges() {
 			// A test already in code doesn't need its take_over_test_id,
 			// even with nothing to apply.
 			if opts.RemoveTakeOvers {
 				plan.RemoveTakeOvers()
 			}
-			plan.WriteText(out)
+			plan.WriteText(out, opts.Text)
 			return plan, nil
 		}
-		plan.WriteText(out)
+		plan.WriteText(out, opts.Text)
 
 		allowArchiveAll := opts.AllowArchiveAll
 		if plan.ArchivesAll() {
@@ -442,7 +466,7 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if opts.RemoveTakeOvers {
 			applied.RemoveTakeOvers()
 		}
-		applied.writeSummary(out)
+		applied.writeSummary(out, opts.Text.Theme)
 		return applied, nil
 	}
 }

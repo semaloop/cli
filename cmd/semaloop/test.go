@@ -28,6 +28,25 @@ type TestOutput struct {
 
 func (o TestOutput) json() bool { return o.Output == "json" }
 
+// TestPlanOutput is TestOutput for commands that show a plan.
+type TestPlanOutput struct {
+	TestOutput
+	Full bool `help:"Show every change in full. Otherwise, long changes are shortened, and only the fields are named when many tests change."`
+}
+
+// text is how to write a plan as text to stdout.
+func (o TestPlanOutput) text(g *Globals) icmd.TextOptions {
+	width := 0
+	if !o.Full {
+		// Off a terminal, e.g. in CI, keep lines to a width logs show well.
+		width = 120
+		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+			width = w
+		}
+	}
+	return icmd.TextOptions{Theme: g.stdoutTheme(), Width: width, Full: o.Full}
+}
+
 // TestCheckCmd checks test files without an API key or any network calls.
 type TestCheckCmd struct {
 	Path string `arg:"" default:".semaloop/tests" help:"Directory of test files, relative to the current directory (default: ${default})." completion-predictor:"dir"`
@@ -46,7 +65,7 @@ func (c *TestCheckCmd) Run() error {
 // TestDiffCmd shows what a sync would change.
 type TestDiffCmd struct {
 	Path string `arg:"" default:".semaloop/tests" help:"Directory of test files, relative to the current directory (default: ${default})." completion-predictor:"dir"`
-	TestOutput
+	TestPlanOutput
 }
 
 func (c *TestDiffCmd) Run(g *Globals) error {
@@ -59,16 +78,17 @@ func (c *TestDiffCmd) Run(g *Globals) error {
 		log.Info("Dry run: test files checked, no plan made.", "dir", c.Path, "tests", len(tests))
 		return nil
 	}
-	return diff(c.Path, c.TestOutput)
+	return diff(g, c.Path, c.TestPlanOutput)
 }
 
-func diff(path string, out TestOutput) error {
-	s, err := newSyncClient(path, out)
+func diff(g *Globals, path string, out TestPlanOutput) error {
+	s, err := newSyncClient(path, out.TestOutput)
 	if err != nil {
 		return err
 	}
 	_, err = icmd.Diff(context.Background(), s, os.Stdout, icmd.DiffOptions{
 		JSON: out.json(),
+		Text: out.text(g),
 		// Only a person at a terminal can act on the hint. In CI, how a plan
 		// gets applied is up to the workflow.
 		Hint: term.IsTerminal(int(os.Stdout.Fd())),
@@ -82,7 +102,7 @@ type TestSyncCmd struct {
 	Path            string `arg:"" default:".semaloop/tests" help:"Directory of test files, relative to the current directory (default: ${default})." completion-predictor:"dir"`
 	Yes             bool   `short:"y" help:"Apply without asking. Sync only asks in a terminal, and never in CI."`
 	AllowArchiveAll bool   `help:"Allow a sync that archives every test in code where sync doesn't ask, e.g. in CI. In a terminal, sync asks you to confirm it instead." name:"allow-archive-all"`
-	TestOutput
+	TestPlanOutput
 }
 
 func (c *TestSyncCmd) Help() string {
@@ -93,7 +113,7 @@ func (c *TestSyncCmd) Run(g *Globals) error {
 	// For sync, --dry-run is `test diff`: it shows the plan, which needs a
 	// network call but changes nothing.
 	if g.DryRun {
-		return diff(c.Path, c.TestOutput)
+		return diff(g, c.Path, c.TestPlanOutput)
 	}
 
 	confirm := !c.Yes && canAsk()
@@ -111,6 +131,7 @@ func (c *TestSyncCmd) Run(g *Globals) error {
 		Prompt:          os.Stderr,
 		AllowArchiveAll: c.AllowArchiveAll,
 		JSON:            c.json(),
+		Text:            c.text(g),
 		RemoveTakeOvers: canAsk(),
 	})
 	if err != nil {
