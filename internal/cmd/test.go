@@ -441,11 +441,8 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		}
 		if opts.RemoveTakeOvers {
 			applied.RemoveTakeOvers()
-			if r := applied.removedText(); r != "" {
-				fmt.Fprintln(out, r)
-			}
 		}
-		fmt.Fprintln(out, applied.Totals())
+		applied.writeSummary(out)
 		return applied, nil
 	}
 }

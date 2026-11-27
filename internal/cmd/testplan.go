@@ -192,7 +192,10 @@ func (p *Plan) doneTakeOvers() []testfile.Test {
 	var done []testfile.Test
 	for _, ch := range p.Changes {
 		t, ok := p.tests[ch.Identifier]
-		if ok && t.TakeOverTestID != "" && (bool(ch.TakeOverRedundant.Value) || (p.Applied && ch.Action == actionTakeOver)) {
+		if !ok || t.TakeOverTestID == "" {
+			continue
+		}
+		if bool(ch.TakeOverRedundant.Value) || (p.Applied && ch.Action == actionTakeOver) {
 			done = append(done, t)
 		}
 	}
@@ -209,9 +212,11 @@ func (p *Plan) RemoveTakeOvers() {
 			log.Warn("Could not remove take_over_test_id, which is no longer needed.", "path", t.Path, "reason", err)
 			continue
 		}
-		p.RemovedTakeOvers = append(p.RemovedTakeOvers, p.path(api.SyncTestChange{Identifier: t.Identifier}))
+		p.RemovedTakeOvers = append(p.RemovedTakeOvers, p.relPath(t))
 	}
 }
+
+var errFileChanged = errors.New("the file has changed since the sync read it")
 
 // removeTakeOver removes take_over_test_id from t's file, if the file still
 // says what it did when it was loaded.
@@ -221,18 +226,17 @@ func removeTakeOver(t testfile.Test) error {
 		return err
 	}
 	if now, errs := testfile.Parse(t.Path, data); len(errs) > 0 || now.Identifier != t.Identifier || now.TakeOverTestID != t.TakeOverTestID {
-		return errors.New("the file has changed since the sync read it")
+		return errFileChanged
 	}
 	out, err := testfile.RemoveTakeOver(t.Path, data)
 	if err != nil {
 		return err
 	}
-	if err := replaceFile(t.Path, data, out); errors.Is(err, ErrPullConflict) {
-		return errors.New("the file has changed since the sync read it")
-	} else if err != nil {
-		return err
+	err = replaceFile(t.Path, data, out)
+	if errors.Is(err, ErrPullConflict) {
+		return errFileChanged
 	}
-	return nil
+	return err
 }
 
 // removedText says which files RemoveTakeOvers changed, or is empty when it
@@ -264,6 +268,11 @@ func (p *Plan) path(ch api.SyncTestChange) string {
 	if !ok {
 		return ""
 	}
+	return p.relPath(t)
+}
+
+// relPath is t's path relative to Dir.
+func (p *Plan) relPath(t testfile.Test) string {
 	if rel, err := filepath.Rel(p.Dir, t.Path); err == nil {
 		return rel
 	}
@@ -328,6 +337,12 @@ func (p *Plan) WriteText(out io.Writer) {
 	if !p.Applied && p.ArchivesAll() {
 		fmt.Fprintln(out, "Warning: this archives every test in code. `semaloop test sync` asks you to confirm it, or pass --allow-archive-all where it can't ask.")
 	}
+	p.writeSummary(out)
+}
+
+// writeSummary writes which files RemoveTakeOvers changed, if any, and the
+// totals.
+func (p *Plan) writeSummary(out io.Writer) {
 	if r := p.removedText(); r != "" {
 		fmt.Fprintln(out, r)
 	}
