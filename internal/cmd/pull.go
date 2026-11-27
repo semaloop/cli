@@ -339,7 +339,7 @@ func writePullText(out io.Writer, plan PullPlan) {
 		}
 		return
 	}
-	fmt.Fprintf(out, "Wrote %s. Commit them, then run `semaloop test sync` to move the tests into code.\n", plural(len(plan.Files), "file"))
+	fmt.Fprintf(out, "Wrote %s. Commit them, then run `semaloop test sync` to move the tests into code. Run in a terminal, the sync then removes take_over_test_id, which is no longer needed.\n", plural(len(plan.Files), "file"))
 }
 
 type jsonPulledFile struct {

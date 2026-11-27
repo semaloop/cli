@@ -2,13 +2,16 @@ package cmd
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"unicode"
 
+	"github.com/charmbracelet/log"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/semaloop/cli/internal/api"
 	"github.com/semaloop/cli/internal/testfile"
@@ -25,6 +28,9 @@ type Plan struct {
 	// Changes has one change per test, grouped by action in the order
 	// actions lists them.
 	Changes []api.SyncTestChange
+	// RemovedTakeOvers are the files, relative to Dir, that
+	// RemoveTakeOvers removed take_over_test_id from.
+	RemovedTakeOvers []string
 
 	tests map[string]testfile.Test
 	// dashboard is the app's tests from before the plan, when they're known.
@@ -157,14 +163,96 @@ func (p *Plan) Warnings() []string {
 				ch.Identifier, id))
 		}
 	}
+	var redundant []api.SyncTestChange
 	for _, ch := range p.Changes {
-		if ch.TakeOverRedundant.Value {
-			warnings = append(warnings, fmt.Sprintf(
-				"%s is already in code, so take_over_test_id can be removed from %s.",
-				ch.Identifier, cmp.Or(p.path(ch), "its file")))
+		if bool(ch.TakeOverRedundant.Value) && !slices.Contains(p.RemovedTakeOvers, p.path(ch)) {
+			redundant = append(redundant, ch)
 		}
 	}
+	switch len(redundant) {
+	case 0:
+	case 1:
+		warnings = append(warnings, fmt.Sprintf(
+			"%s is already in code, so take_over_test_id can be removed from %s.",
+			redundant[0].Identifier, cmp.Or(p.path(redundant[0]), "its file")))
+	default:
+		paths := make([]string, len(redundant))
+		for i, ch := range redundant {
+			paths[i] = cmp.Or(p.path(ch), ch.Identifier)
+		}
+		warnings = append(warnings, fmt.Sprintf(
+			"%d tests are already in code, so take_over_test_id can be removed from their files: %s.",
+			len(redundant), strings.Join(paths, ", ")))
+	}
 	return warnings
+}
+
+// doneTakeOvers are the test files whose take_over_test_id is no longer
+// needed: the test is already in code, or, once the plan is applied, has just
+// been taken over.
+func (p *Plan) doneTakeOvers() []testfile.Test {
+	var done []testfile.Test
+	for _, ch := range p.Changes {
+		t, ok := p.tests[ch.Identifier]
+		if !ok || t.TakeOverTestID == "" {
+			continue
+		}
+		if bool(ch.TakeOverRedundant.Value) || (p.Applied && ch.Action == actionTakeOver) {
+			done = append(done, t)
+		}
+	}
+	return done
+}
+
+// RemoveTakeOvers removes take_over_test_id from the files that no longer
+// need it, adding each one to RemovedTakeOvers. A file that can't be changed
+// is logged and left as it is: the field does no harm, so the sync has still
+// succeeded.
+func (p *Plan) RemoveTakeOvers() {
+	for _, t := range p.doneTakeOvers() {
+		if err := removeTakeOver(t); err != nil {
+			log.Warn("Could not remove take_over_test_id, which is no longer needed.", "path", t.Path, "reason", err)
+			continue
+		}
+		p.RemovedTakeOvers = append(p.RemovedTakeOvers, p.relPath(t))
+	}
+}
+
+var errFileChanged = errors.New("the file has changed since the sync read it")
+
+// removeTakeOver removes take_over_test_id from t's file, if the file still
+// says what it did when it was loaded.
+func removeTakeOver(t testfile.Test) error {
+	data, err := os.ReadFile(t.Path)
+	if err != nil {
+		return err
+	}
+	if now, errs := testfile.Parse(t.Path, data); len(errs) > 0 || now.Identifier != t.Identifier || now.TakeOverTestID != t.TakeOverTestID {
+		return errFileChanged
+	}
+	out, err := testfile.RemoveTakeOver(t.Path, data)
+	if err != nil {
+		return err
+	}
+	err = replaceFile(t.Path, data, out)
+	if errors.Is(err, ErrPullConflict) {
+		return errFileChanged
+	}
+	return err
+}
+
+// removedText says which files RemoveTakeOvers changed, or is empty when it
+// changed none.
+func (p *Plan) removedText() string {
+	switch n := len(p.RemovedTakeOvers); n {
+	case 0:
+		return ""
+	case 1:
+		return fmt.Sprintf("Removed take_over_test_id from %s, as its test is now in code. Commit the change.", p.RemovedTakeOvers[0])
+	default:
+		return fmt.Sprintf("Removed take_over_test_id from %d files, as their tests are now in code: %s. Commit the change.",
+			n, strings.Join(p.RemovedTakeOvers, ", "))
+	}
 }
 
 // name is the test's name, from the file when there is one.
@@ -182,6 +270,11 @@ func (p *Plan) path(ch api.SyncTestChange) string {
 	if !ok {
 		return ""
 	}
+	return p.relPath(t)
+}
+
+// relPath is t's path relative to Dir.
+func (p *Plan) relPath(t testfile.Test) string {
 	if rel, err := filepath.Rel(p.Dir, t.Path); err == nil {
 		return rel
 	}
@@ -249,6 +342,15 @@ func (p *Plan) WriteText(out io.Writer, opts TextOptions) {
 	}
 	if !p.Applied && p.ArchivesAll() {
 		fmt.Fprintln(out, t.yellow("Warning:")+" this archives every test in code. `semaloop test sync` asks you to confirm it, or pass --allow-archive-all where it can't ask.")
+	}
+	p.writeSummary(out, t)
+}
+
+// writeSummary writes which files RemoveTakeOvers changed, if any, and the
+// totals.
+func (p *Plan) writeSummary(out io.Writer, t Theme) {
+	if r := p.removedText(); r != "" {
+		fmt.Fprintln(out, r)
 	}
 	fmt.Fprintln(out, p.totals(t))
 }
@@ -380,19 +482,22 @@ type jsonPlan struct {
 	Changes     []jsonChange   `json:"changes"`
 	Totals      map[string]int `json:"totals"`
 	Warnings    []string       `json:"warnings"`
+	// RemovedTakeOvers lists the files take_over_test_id was removed from.
+	RemovedTakeOvers []string `json:"removedTakeOvers"`
 }
 
 // WriteJSON writes the plan for a program to read.
 func (p *Plan) WriteJSON(out io.Writer) {
 	res := jsonPlan{
-		Dir:         p.Dir,
-		App:         jsonApp{p.App.Name, p.App.BundleId},
-		Revision:    p.Revision,
-		Applied:     p.Applied,
-		ArchivesAll: p.ArchivesAll(),
-		Changes:     []jsonChange{},
-		Totals:      map[string]int{},
-		Warnings:    append([]string{}, p.Warnings()...),
+		Dir:              p.Dir,
+		App:              jsonApp{p.App.Name, p.App.BundleId},
+		Revision:         p.Revision,
+		Applied:          p.Applied,
+		ArchivesAll:      p.ArchivesAll(),
+		Changes:          []jsonChange{},
+		Totals:           map[string]int{},
+		Warnings:         append([]string{}, p.Warnings()...),
+		RemovedTakeOvers: append([]string{}, p.RemovedTakeOvers...),
 	}
 	for _, ch := range p.Changes {
 		c := jsonChange{

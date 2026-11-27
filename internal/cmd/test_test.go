@@ -768,3 +768,162 @@ func TestPlanServerErrorDoesntSayApplied(t *testing.T) {
 		t.Errorf("expected a plain error for a plan, got %v", err)
 	}
 }
+
+const plannedTakeOver = `{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":%d,"changes":[{"identifier":"sign-in","action":"take_over","testId":"01JABC"},{"identifier":"checkout","action":"unchanged","testId":"t-checkout","takeOverRedundant":true}]}`
+
+const checkoutTakenOverFile = `---
+identifier: checkout
+name: Checkout
+take_over_test_id: t-checkout
+---
+Buy something.
+`
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestSyncRemovesTakeOversOnceDone(t *testing.T) {
+	srv := newSyncServer(t, ok(fmt.Sprintf(plannedTakeOver, 7)), ok(fmt.Sprintf(plannedTakeOver, 8)))
+	dir := writeTestFiles(t, map[string]string{"sign-in.md": signInFile, "checkout.md": checkoutTakenOverFile})
+
+	opts := confirmOptions("y\n", io.Discard)
+	opts.RemoveTakeOvers = true
+	var out bytes.Buffer
+	p, err := Sync(context.Background(), srv.client(dir), &out, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := strings.Replace(signInFile, "take_over_test_id: 01JABC\n", "", 1); readFile(t, filepath.Join(dir, "sign-in.md")) != want {
+		t.Errorf("take_over_test_id wasn't removed from sign-in.md:\n%s", readFile(t, filepath.Join(dir, "sign-in.md")))
+	}
+	if want := strings.Replace(checkoutTakenOverFile, "take_over_test_id: t-checkout\n", "", 1); readFile(t, filepath.Join(dir, "checkout.md")) != want {
+		t.Errorf("take_over_test_id wasn't removed from checkout.md:\n%s", readFile(t, filepath.Join(dir, "checkout.md")))
+	}
+	if got, want := p.RemovedTakeOvers, []string{"sign-in.md", "checkout.md"}; !slices.Equal(got, want) {
+		t.Errorf("got removed %q, want %q", got, want)
+	}
+	if !strings.HasSuffix(out.String(), "Removed take_over_test_id from 2 files, as their tests are now in code: sign-in.md, checkout.md. Commit the change.\n1 taken over, 1 unchanged.\n") {
+		t.Errorf("expected the removed files and then the totals, got:\n%s", out.String())
+	}
+}
+
+func TestSyncRemovesRedundantTakeOversWithoutChanges(t *testing.T) {
+	srv := newSyncServer(t, ok(`{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":7,"changes":[{"identifier":"checkout","action":"unchanged","testId":"t-checkout","takeOverRedundant":true}]}`))
+	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutTakenOverFile})
+
+	opts := confirmOptions("", io.Discard)
+	opts.RemoveTakeOvers = true
+	var out bytes.Buffer
+	if _, err := Sync(context.Background(), srv.client(dir), &out, opts); err != nil {
+		t.Fatal(err)
+	}
+	if readFile(t, filepath.Join(dir, "checkout.md")) != checkoutFile {
+		t.Errorf("take_over_test_id wasn't removed:\n%s", readFile(t, filepath.Join(dir, "checkout.md")))
+	}
+	if strings.Contains(out.String(), "Warning") {
+		t.Errorf("expected no warning about a take over that was removed, got:\n%s", out.String())
+	}
+	if !strings.HasSuffix(out.String(), "Removed take_over_test_id from checkout.md, as its test is now in code. Commit the change.\nNo changes, 1 unchanged.\n") {
+		t.Errorf("unexpected output:\n%s", out.String())
+	}
+}
+
+func TestSyncCancelledWarnsAboutRedundantTakeOvers(t *testing.T) {
+	srv := newSyncServer(t, ok(fmt.Sprintf(plannedTakeOver, 7)))
+	dir := writeTestFiles(t, map[string]string{"sign-in.md": signInFile, "checkout.md": checkoutTakenOverFile})
+
+	opts := confirmOptions("n\n", io.Discard)
+	opts.RemoveTakeOvers = true
+	var out bytes.Buffer
+	if _, err := Sync(context.Background(), srv.client(dir), &out, opts); !errors.Is(err, ErrCancelled) {
+		t.Fatalf("expected ErrCancelled, got %v", err)
+	}
+	if !strings.Contains(out.String(), "Warning: checkout is already in code, so take_over_test_id can be removed from checkout.md.") {
+		t.Errorf("expected a warning about checkout.md, got:\n%s", out.String())
+	}
+	if readFile(t, filepath.Join(dir, "checkout.md")) != checkoutTakenOverFile {
+		t.Errorf("expected checkout.md to be left alone when cancelled, got:\n%s", readFile(t, filepath.Join(dir, "checkout.md")))
+	}
+}
+
+func TestSyncWithoutConfirmRemovesTakeOvers(t *testing.T) {
+	srv := newSyncServer(t, ok(fmt.Sprintf(plannedTakeOver, 8)))
+	dir := writeTestFiles(t, map[string]string{"sign-in.md": signInFile, "checkout.md": checkoutTakenOverFile})
+
+	var out bytes.Buffer
+	p, err := Sync(context.Background(), srv.client(dir), &out, SyncOptions{RemoveTakeOvers: true, JSON: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.RemovedTakeOvers) != 2 {
+		t.Errorf("expected 2 files changed, got %q", p.RemovedTakeOvers)
+	}
+	var got jsonPlan
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got.RemovedTakeOvers, []string{"sign-in.md", "checkout.md"}) || len(got.Warnings) != 0 {
+		t.Errorf("unexpected output:\n%s", out.String())
+	}
+}
+
+func TestSyncLeavesTakeOversUnlessAsked(t *testing.T) {
+	srv := newSyncServer(t, ok(fmt.Sprintf(plannedTakeOver, 8)))
+	dir := writeTestFiles(t, map[string]string{"sign-in.md": signInFile, "checkout.md": checkoutTakenOverFile})
+
+	var out bytes.Buffer
+	p, err := Sync(context.Background(), srv.client(dir), &out, SyncOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if readFile(t, filepath.Join(dir, "sign-in.md")) != signInFile || readFile(t, filepath.Join(dir, "checkout.md")) != checkoutTakenOverFile || len(p.RemovedTakeOvers) != 0 {
+		t.Error("expected the files to be left as they were")
+	}
+	if !strings.Contains(out.String(), "Warning: checkout is already in code, so take_over_test_id can be removed from checkout.md.\n") {
+		t.Errorf("expected a warning about checkout.md, got:\n%s", out.String())
+	}
+}
+
+func TestSyncDoesntRemoveTakeOverFromChangedFile(t *testing.T) {
+	srv := newSyncServer(t, ok(`{"success":true,"app":{"name":"Sim Shop","bundleId":"com.example.simshop"},"revision":7,"changes":[{"identifier":"checkout","action":"unchanged","testId":"t-checkout","takeOverRedundant":true}]}`))
+	dir := writeTestFiles(t, map[string]string{"checkout.md": checkoutTakenOverFile})
+	c := srv.client(dir)
+	edited := strings.Replace(checkoutTakenOverFile, "t-checkout", "t-other", 1)
+	if err := os.WriteFile(filepath.Join(dir, "checkout.md"), []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := Sync(context.Background(), c, io.Discard, SyncOptions{RemoveTakeOvers: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if readFile(t, filepath.Join(dir, "checkout.md")) != edited || len(p.RemovedTakeOvers) != 0 {
+		t.Error("expected the edited file to be left as it was")
+	}
+	if len(p.Warnings()) != 1 {
+		t.Errorf("expected a warning about the file that wasn't changed, got %q", p.Warnings())
+	}
+}
+
+func TestPlanWarnsOnceAboutManyRedundantTakeOvers(t *testing.T) {
+	dir := "tests"
+	redundant := api.NewOptSyncTestChangeTakeOverRedundant(true)
+	p := newPlan(dir, testApp, []testfile.Test{
+		{Path: filepath.Join(dir, "a.md"), Identifier: "a", Name: "A"},
+		{Path: filepath.Join(dir, "b.md"), Identifier: "b", Name: "B"},
+	}, 1, false, []api.SyncTestChange{
+		{Identifier: "a", Action: actionUnchanged, TakeOverRedundant: redundant},
+		{Identifier: "b", Action: actionUnchanged, TakeOverRedundant: redundant},
+		{Identifier: "c", Action: actionUnchanged, TakeOverRedundant: redundant},
+	})
+	want := []string{"3 tests are already in code, so take_over_test_id can be removed from their files: a.md, b.md, c."}
+	if got := p.Warnings(); !slices.Equal(got, want) {
+		t.Errorf("got warnings:\n%q\nwant:\n%q", got, want)
+	}
+}

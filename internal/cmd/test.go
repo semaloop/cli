@@ -386,6 +386,10 @@ type SyncOptions struct {
 	JSON bool
 	// Text configures the plan and result as text.
 	Text TextOptions
+	// RemoveTakeOvers removes take_over_test_id from the files that no
+	// longer need it once the sync succeeds. Only set it where the changed
+	// files can be committed, not in CI.
+	RemoveTakeOvers bool
 }
 
 // Sync makes the app's tests in code match the files, and writes the result
@@ -404,6 +408,9 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
+		if opts.RemoveTakeOvers {
+			p.RemoveTakeOvers()
+		}
 		if opts.JSON {
 			p.WriteJSON(out)
 		} else {
@@ -419,10 +426,16 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 			return nil, err
 		}
 		s.withDashboard(ctx, plan, opts.Text)
-		plan.WriteText(out, opts.Text)
 		if !plan.HasChanges() {
+			// A test already in code doesn't need its take_over_test_id,
+			// even with nothing to apply.
+			if opts.RemoveTakeOvers {
+				plan.RemoveTakeOvers()
+			}
+			plan.WriteText(out, opts.Text)
 			return plan, nil
 		}
+		plan.WriteText(out, opts.Text)
 
 		allowArchiveAll := opts.AllowArchiveAll
 		if plan.ArchivesAll() {
@@ -450,7 +463,10 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
-		fmt.Fprintln(out, applied.totals(opts.Text.Theme))
+		if opts.RemoveTakeOvers {
+			applied.RemoveTakeOvers()
+		}
+		applied.writeSummary(out, opts.Text.Theme)
 		return applied, nil
 	}
 }

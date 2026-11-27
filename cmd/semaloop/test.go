@@ -106,7 +106,7 @@ type TestSyncCmd struct {
 }
 
 func (c *TestSyncCmd) Help() string {
-	return "In a terminal, sync shows the plan and asks before applying it. Pass --dry-run to only show the plan, like `semaloop test diff`."
+	return "In a terminal, sync shows the plan and asks before applying it. Pass --dry-run to only show the plan, like `semaloop test diff`. Once a test is in code, sync in a terminal removes take_over_test_id from its file, which no longer needs it."
 }
 
 func (c *TestSyncCmd) Run(g *Globals) error {
@@ -132,6 +132,7 @@ func (c *TestSyncCmd) Run(g *Globals) error {
 		AllowArchiveAll: c.AllowArchiveAll,
 		JSON:            c.json(),
 		Text:            c.text(g),
+		RemoveTakeOvers: canAsk(),
 	})
 	if err != nil {
 		return syncError("test sync", err)
@@ -200,7 +201,7 @@ type TestPullCmd struct {
 }
 
 func (c *TestPullCmd) Help() string {
-	return "Each file sets take_over_test_id, so the next `semaloop test sync` moves the test into code and keeps its history, instead of creating a new test."
+	return "Each file sets take_over_test_id, so the next `semaloop test sync` moves the test into code and keeps its history, instead of creating a new test. A sync in a terminal then removes take_over_test_id, which is no longer needed."
 }
 
 func (c *TestPullCmd) Run(g *Globals) error {

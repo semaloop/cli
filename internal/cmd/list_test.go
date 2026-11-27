@@ -139,7 +139,7 @@ func TestPullWritesFilesThatSyncTakesOver(t *testing.T) {
 		"  + " + filepath.Join(dir, "search.md") + "\n" +
 		"  + " + filepath.Join(dir, "smoke-tests", "sign-in-with-email.md") + "\n" +
 		"\n" +
-		"Wrote 2 files. Commit them, then run `semaloop test sync` to move the tests into code.\n"
+		"Wrote 2 files. Commit them, then run `semaloop test sync` to move the tests into code. Run in a terminal, the sync then removes take_over_test_id, which is no longer needed.\n"
 	if out.String() != want {
 		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
 	}
