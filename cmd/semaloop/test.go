@@ -111,7 +111,8 @@ func (c *TestSyncCmd) Run(g *Globals) error {
 		Prompt:          os.Stderr,
 		AllowArchiveAll: c.AllowArchiveAll,
 		JSON:            c.json(),
-		// Files changed in CI wouldn't be committed.
+		// Only change files when someone is at a terminal to see the change
+		// and commit it. In CI or a script, it would be lost or unexpected.
 		RemoveTakeOvers: canAsk(),
 	})
 	if err != nil {
