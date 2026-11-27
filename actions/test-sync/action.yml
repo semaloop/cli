@@ -23,6 +23,17 @@ inputs:
     description: 'Allow a sync that would archive every test in code, e.g. when the directory is empty.'
     required: false
     default: 'false'
+  comment:
+    description: >
+      Also post the plan as a comment on the pull request, and update it on
+      each run rather than adding new ones. The job needs the
+      pull-requests: write permission.
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token used to post the pull request comment.'
+    required: false
+    default: ${{ github.token }}
 
 runs:
   using: composite
@@ -50,5 +61,7 @@ runs:
         SEMALOOP_API_KEY: ${{ inputs.api-key }}
         TESTS_PATH: ${{ inputs.path }}
         ALLOW_ARCHIVE_ALL: ${{ inputs.allow-archive-all }}
+        COMMENT: ${{ inputs.comment }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
         EVENT_NAME: ${{ github.event_name }}
       run: bash "$GITHUB_ACTION_PATH/run.sh"

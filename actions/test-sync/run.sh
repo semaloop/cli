@@ -2,14 +2,17 @@
 # Runs the test-sync action. On a push, a manual run or a schedule it syncs.
 # On any other event, such as a pull request, it checks the test files and
 # shows the plan, without applying it. Either way, the result goes to the job
-# summary.
+# summary. With COMMENT=true, a pull request's plan is also posted as a comment
+# on it, which later runs update rather than adding new ones.
 #
-# Reads SEMALOOP_API_KEY, TESTS_PATH, ALLOW_ARCHIVE_ALL and EVENT_NAME.
+# Reads SEMALOOP_API_KEY, TESTS_PATH, ALLOW_ARCHIVE_ALL, COMMENT, GITHUB_TOKEN
+# and EVENT_NAME.
 set -uo pipefail
 
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 out="${RUNNER_TEMP:-/tmp}/semaloop-test-sync.out"
 err="${RUNNER_TEMP:-/tmp}/semaloop-test-sync.err"
+body="${RUNNER_TEMP:-/tmp}/semaloop-test-sync.md"
 
 # Only events that mean "this is what's merged" sync. Everything else, from
 # pull requests to review comments, only ever sees the plan.
@@ -18,13 +21,15 @@ case "$EVENT_NAME" in
   *) mode=plan ;;
 esac
 
-case "$ALLOW_ARCHIVE_ALL" in
-  true | false) ;;
-  *)
-    echo "::error::allow-archive-all must be true or false, got \"$ALLOW_ARCHIVE_ALL\"." >&2
-    exit 1
-    ;;
-esac
+for input in allow-archive-all:"$ALLOW_ARCHIVE_ALL" comment:"${COMMENT:-false}"; do
+  case "${input#*:}" in
+    true | false) ;;
+    *)
+      echo "::error::${input%%:*} must be true or false, got \"${input#*:}\"." >&2
+      exit 1
+      ;;
+  esac
+done
 
 # run runs the CLI, keeps its results and logs for the summary, and shows
 # both in the job log.
@@ -43,26 +48,109 @@ pre() {
   echo "</pre>"
 }
 
-# write_summary TITLE NOTE adds the results, and any errors, to the summary.
-write_summary() {
-  {
-    echo "### $1"
+# render TITLE NOTE writes the results, and any errors, as Markdown.
+render() {
+  echo "### $1"
+  echo
+  if [ -n "$2" ]; then
+    echo "$2"
     echo
-    if [ -n "$2" ]; then
-      echo "$2"
+  fi
+  if [ -s "$out" ]; then
+    pre <"$out"
+  fi
+  if [ "$status" -ne 0 ]; then
+    echo "Failed. The job log has the details."
+    echo
+    if [ -s "$err" ]; then
+      pre <"$err"
+    fi
+  fi
+}
+
+# write_summary TITLE NOTE adds the results to the summary and, if asked for,
+# to the pull request's comment.
+write_summary() {
+  render "$1" "$2" >>"$summary"
+  if [ "${COMMENT:-false}" = true ] && [ "$mode" = plan ]; then
+    comment "$1" "$2"
+  fi
+}
+
+# github METHOD PATH [FILE] calls the GitHub REST API, sending FILE as the
+# request body.
+github() {
+  local args=(-sS --fail-with-body -X "$1"
+    -H "Authorization: Bearer $GITHUB_TOKEN"
+    -H "Accept: application/vnd.github+json"
+    -H "X-GitHub-Api-Version: 2022-11-28")
+  if [ -n "${3:-}" ]; then
+    args+=(--data-binary "@$3")
+  fi
+  curl "${args[@]}" "${GITHUB_API_URL:-https://api.github.com}$2"
+}
+
+# comment TITLE NOTE posts the results as a comment on the pull request, or
+# updates the comment an earlier run posted. A hidden marker, which includes
+# the path so that syncs of different directories keep their own comments,
+# finds it again. Failing to comment is a warning rather than an error, so a
+# plan isn't marked as failed because, say, a fork's token can't write.
+comment() {
+  local pr marker run_url page comments id
+  if ! command -v jq >/dev/null; then
+    echo "::warning::jq isn't installed, so the plan wasn't posted to the pull request." >&2
+    return
+  fi
+  pr=$(jq -r '.pull_request.number // empty' "${GITHUB_EVENT_PATH:-/dev/null}" 2>/dev/null)
+  if [ -z "$pr" ]; then
+    echo "Not commenting: the $EVENT_NAME event isn't for a pull request."
+    return
+  fi
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    echo "::warning::github-token is empty, so the plan wasn't posted to the pull request." >&2
+    return
+  fi
+
+  marker="<!-- semaloop-test-sync: $TESTS_PATH -->"
+  run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID:-}"
+  {
+    echo "$marker"
+    render "$1" "$2"
+    echo
+    echo "[View the run]($run_url)"
+  } >"$body"
+  # GitHub rejects comments longer than 65,536 characters. Leave room for the
+  # rest of the comment and point to the job summary instead.
+  if [ "$(wc -c <"$body")" -gt 60000 ]; then
+    {
+      echo "$marker"
+      echo "### $1"
       echo
+      echo "The plan is too long for a comment. [The job summary]($run_url) has it in full."
+    } >"$body"
+  fi
+  jq -Rs '{body: .}' <"$body" >"$body.json"
+
+  local api="/repos/$GITHUB_REPOSITORY/issues"
+  id=
+  page=1
+  while [ -z "$id" ]; do
+    if ! comments=$(github GET "$api/$pr/comments?per_page=100&page=$page"); then
+      echo "::warning::Couldn't read the pull request's comments, so the plan wasn't posted. Does the workflow have the pull-requests: write permission?" >&2
+      return
     fi
-    if [ -s "$out" ]; then
-      pre <"$out"
+    id=$(jq -r --arg marker "$marker" 'map(select(.body | startswith($marker))) | first | .id // empty' <<<"$comments")
+    if [ "$(jq length <<<"$comments")" -lt 100 ]; then
+      break
     fi
-    if [ "$status" -ne 0 ]; then
-      echo "Failed. The job log has the details."
-      echo
-      if [ -s "$err" ]; then
-        pre <"$err"
-      fi
-    fi
-  } >>"$summary"
+    page=$((page + 1))
+  done
+
+  if [ -n "$id" ]; then
+    github PATCH "$api/comments/$id" "$body.json" >/dev/null
+  else
+    github POST "$api/$pr/comments" "$body.json" >/dev/null
+  fi || echo "::warning::Couldn't post the plan to the pull request. Does the workflow have the pull-requests: write permission?" >&2
 }
 
 if [ -z "${SEMALOOP_API_KEY:-}" ]; then
