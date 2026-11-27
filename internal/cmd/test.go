@@ -366,6 +366,10 @@ type SyncOptions struct {
 	AllowArchiveAll bool
 	// JSON writes the result as JSON. It can't be used with Confirm.
 	JSON bool
+	// RemoveTakeOvers removes take_over_test_id from the files that no
+	// longer need it once the sync succeeds. Only set it where the changed
+	// files can be committed, not in CI.
+	RemoveTakeOvers bool
 }
 
 // Sync makes the app's tests in code match the files, and writes the result
@@ -381,6 +385,9 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
+		if opts.RemoveTakeOvers {
+			p.RemoveTakeOvers()
+		}
 		if opts.JSON {
 			p.WriteJSON(out)
 		} else {
@@ -395,8 +402,17 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 		if err != nil {
 			return nil, err
 		}
+		plan.removingTakeOvers = opts.RemoveTakeOvers
 		plan.WriteText(out)
 		if !plan.HasChanges() {
+			// A test already in code doesn't need its take_over_test_id,
+			// even with nothing to apply.
+			if opts.RemoveTakeOvers {
+				plan.RemoveTakeOvers()
+				if r := plan.removedText(); r != "" {
+					fmt.Fprintln(out, r)
+				}
+			}
 			return plan, nil
 		}
 
@@ -427,6 +443,12 @@ func Sync(ctx context.Context, s *SyncClient, out io.Writer, opts SyncOptions) (
 			return nil, err
 		}
 		fmt.Fprintln(out, applied.Totals())
+		if opts.RemoveTakeOvers {
+			applied.RemoveTakeOvers()
+			if r := applied.removedText(); r != "" {
+				fmt.Fprintln(out, r)
+			}
+		}
 		return applied, nil
 	}
 }
