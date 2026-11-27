@@ -56,12 +56,26 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/../install-cli.sh"
 
     - name: Sync tests
+      id: sync
       shell: bash
       env:
         SEMALOOP_API_KEY: ${{ inputs.api-key }}
         TESTS_PATH: ${{ inputs.path }}
         ALLOW_ARCHIVE_ALL: ${{ inputs.allow-archive-all }}
         COMMENT: ${{ inputs.comment }}
-        GITHUB_TOKEN: ${{ inputs.github-token }}
         EVENT_NAME: ${{ github.event_name }}
       run: bash "$GITHUB_ACTION_PATH/run.sh"
+
+    - name: Comment on the pull request
+      # Runs even when the plan failed, so the comment says so. It skips itself
+      # on events that aren't for a pull request. Failing to comment, e.g.
+      # because a fork's token is read-only, doesn't fail the job.
+      # Pinned to a commit, as it runs with a token that can write.
+      if: ${{ !cancelled() && steps.sync.outputs.comment-path != '' }}
+      continue-on-error: true
+      uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      with:
+        header: semaloop-test-sync ${{ inputs.path }}
+        path: ${{ steps.sync.outputs.comment-path }}
+        only_update: ${{ steps.sync.outputs.comment-only-update }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}

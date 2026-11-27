@@ -2,11 +2,10 @@
 # Runs the test-sync action. On a push, a manual run or a schedule it syncs.
 # On any other event, such as a pull request, it checks the test files and
 # shows the plan, without applying it. Either way, the result goes to the job
-# summary. With COMMENT=true, a pull request's plan is also posted as a comment
-# on it, which later runs update rather than adding new ones.
+# summary. With COMMENT=true, the plan is also written as a comment, for the
+# next step to post on the pull request.
 #
-# Reads SEMALOOP_API_KEY, TESTS_PATH, ALLOW_ARCHIVE_ALL, COMMENT, GITHUB_TOKEN
-# and EVENT_NAME.
+# Reads SEMALOOP_API_KEY, TESTS_PATH, ALLOW_ARCHIVE_ALL, COMMENT and EVENT_NAME.
 set -uo pipefail
 
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
@@ -69,7 +68,7 @@ render() {
 }
 
 # write_summary TITLE NOTE adds the results to the summary and, if asked for,
-# to the pull request's comment.
+# writes the pull request's comment.
 write_summary() {
   render "$1" "$2" >>"$summary"
   if [ "${COMMENT:-false}" = true ] && [ "$mode" = plan ]; then
@@ -83,46 +82,15 @@ unchanged() {
   [ "$status" -eq 0 ] && grep -Eq '^No changes, [0-9]+ unchanged\.$' "$out"
 }
 
-# github METHOD PATH [FILE] calls the GitHub REST API, sending FILE as the
-# request body.
-github() {
-  local args=(-sS --fail-with-body -X "$1"
-    -H "Authorization: Bearer $GITHUB_TOKEN"
-    -H "Accept: application/vnd.github+json"
-    -H "X-GitHub-Api-Version: 2022-11-28")
-  if [ -n "${3:-}" ]; then
-    args+=(--data-binary "@$3")
-  fi
-  curl "${args[@]}" "${GITHUB_API_URL:-https://api.github.com}$2"
-}
-
-# comment TITLE NOTE posts the results as a comment on the pull request, or
-# updates the comment an earlier run posted. A plan with no changes isn't worth
-# a new comment, but it does update an earlier one, which would otherwise show
-# changes that are no longer planned. A hidden marker, which includes
-# the path so that syncs of different directories keep their own comments,
-# finds it again. Failing to comment is a warning rather than an error, so a
-# plan isn't marked as failed because, say, a fork's token can't write.
+# comment TITLE NOTE writes the results as the pull request's comment, and
+# sets the step outputs the next step posts it with: comment-path, the file,
+# and comment-only-update, which is true when the plan has no changes. That
+# isn't worth a new comment, but it does update an earlier one, which would
+# otherwise show changes that are no longer planned.
 comment() {
-  local pr marker run_url page comments id
-  if ! command -v jq >/dev/null; then
-    echo "::warning::jq isn't installed, so the plan wasn't posted to the pull request." >&2
-    return
-  fi
-  pr=$(jq -r '.pull_request.number // empty' "${GITHUB_EVENT_PATH:-/dev/null}" 2>/dev/null)
-  if [ -z "$pr" ]; then
-    echo "Not commenting: the $EVENT_NAME event isn't for a pull request."
-    return
-  fi
-  if [ -z "${GITHUB_TOKEN:-}" ]; then
-    echo "::warning::github-token is empty, so the plan wasn't posted to the pull request." >&2
-    return
-  fi
-
-  marker="<!-- semaloop-test-sync: $TESTS_PATH -->"
-  run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID:-}"
+  local run_url only_update=false
+  run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/actions/runs/${GITHUB_RUN_ID:-}"
   {
-    echo "$marker"
     render "$1" "$2"
     echo
     echo "[View the run]($run_url)"
@@ -131,38 +99,18 @@ comment() {
   # rest of the comment and point to the job summary instead.
   if [ "$(wc -c <"$body")" -gt 60000 ]; then
     {
-      echo "$marker"
       echo "### $1"
       echo
       echo "The plan is too long for a comment. [The job summary]($run_url) has it in full."
     } >"$body"
   fi
-  jq -Rs '{body: .}' <"$body" >"$body.json"
-
-  local api="/repos/$GITHUB_REPOSITORY/issues"
-  id=
-  page=1
-  while [ -z "$id" ]; do
-    if ! comments=$(github GET "$api/$pr/comments?per_page=100&page=$page"); then
-      echo "::warning::Couldn't read the pull request's comments, so the plan wasn't posted. Does the workflow have the pull-requests: write permission?" >&2
-      return
-    fi
-    id=$(jq -r --arg marker "$marker" 'map(select(.body | startswith($marker))) | first | .id // empty' <<<"$comments")
-    if [ "$(jq length <<<"$comments")" -lt 100 ]; then
-      break
-    fi
-    page=$((page + 1))
-  done
-
-  if [ -z "$id" ] && unchanged; then
-    echo "Not commenting: the plan has no changes."
-    return
+  if unchanged; then
+    only_update=true
   fi
-  if [ -n "$id" ]; then
-    github PATCH "$api/comments/$id" "$body.json" >/dev/null
-  else
-    github POST "$api/$pr/comments" "$body.json" >/dev/null
-  fi || echo "::warning::Couldn't post the plan to the pull request. Does the workflow have the pull-requests: write permission?" >&2
+  {
+    echo "comment-path=$body"
+    echo "comment-only-update=$only_update"
+  } >>"${GITHUB_OUTPUT:-/dev/null}"
 }
 
 if [ -z "${SEMALOOP_API_KEY:-}" ]; then
