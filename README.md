@@ -156,7 +156,7 @@ When it syncs, it sends the repository, the commit and each test's file, so Sema
 
 GitHub doesn't give secrets to pull requests from forks, so for those the action only checks the files and says in the job summary why the plan was skipped. Use `pull_request` rather than `pull_request_target`, which would run with your secrets on a fork's changes. The `concurrency` group stops two syncs running at once.
 
-Reviewers rarely open the job summary. To post the plan as a comment on the pull request as well, set `comment: true` and grant `pull-requests: write`. The action keeps one comment per pull request and updates it on each run. If it can't post the comment, for example because a fork's token is read-only, it logs a warning and the job doesn't fail.
+Reviewers rarely open the job summary. To post the plan as a comment on the pull request as well, set `comment: true` and grant `pull-requests: write`. The action keeps one comment per pull request and updates it on each run. It doesn't comment on a plan with no changes, unless it has commented on that pull request before. If it can't post the comment, for example because a fork's token is read-only, it logs a warning and the job doesn't fail.
 
 ```yaml
 permissions:

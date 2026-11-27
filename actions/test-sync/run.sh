@@ -77,6 +77,12 @@ write_summary() {
   fi
 }
 
+# unchanged is whether the plan changes nothing. The CLI ends such a plan with
+# "No changes, N unchanged." (Plan.totals in internal/cmd/testplan.go).
+unchanged() {
+  [ "$status" -eq 0 ] && grep -Eq '^No changes, [0-9]+ unchanged\.$' "$out"
+}
+
 # github METHOD PATH [FILE] calls the GitHub REST API, sending FILE as the
 # request body.
 github() {
@@ -91,7 +97,9 @@ github() {
 }
 
 # comment TITLE NOTE posts the results as a comment on the pull request, or
-# updates the comment an earlier run posted. A hidden marker, which includes
+# updates the comment an earlier run posted. A plan with no changes isn't worth
+# a new comment, but it does update an earlier one, which would otherwise show
+# changes that are no longer planned. A hidden marker, which includes
 # the path so that syncs of different directories keep their own comments,
 # finds it again. Failing to comment is a warning rather than an error, so a
 # plan isn't marked as failed because, say, a fork's token can't write.
@@ -146,6 +154,10 @@ comment() {
     page=$((page + 1))
   done
 
+  if [ -z "$id" ] && unchanged; then
+    echo "Not commenting: the plan has no changes."
+    return
+  fi
   if [ -n "$id" ]; then
     github PATCH "$api/comments/$id" "$body.json" >/dev/null
   else
