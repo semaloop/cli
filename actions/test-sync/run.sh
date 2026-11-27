@@ -82,11 +82,8 @@ unchanged() {
   [ "$status" -eq 0 ] && grep -Eq '^No changes, [0-9]+ unchanged\.$' "$out"
 }
 
-# comment TITLE NOTE writes the results as the pull request's comment, and
-# sets the step outputs the next step posts it with: comment-path, the file,
-# and comment-only-update, which is true when the plan has no changes. That
-# isn't worth a new comment, but it does update an earlier one, which would
-# otherwise show changes that are no longer planned.
+# comment writes the pull request's comment for the next step to post. With no
+# changes, it only updates an earlier comment.
 comment() {
   local run_url only_update=false
   run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/actions/runs/${GITHUB_RUN_ID:-}"
