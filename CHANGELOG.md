@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/semaloop/cli/compare/v1.16.0...v1.17.0) (2026-11-27)
+
+
+### Features
+
+* colour test diff and sync output and show how fields change ([#33](https://github.com/semaloop/cli/issues/33)) ([beb5ce5](https://github.com/semaloop/cli/commit/beb5ce52e31abc9d2651c21e988dddfbfececc11))
+
 # [1.16.0](https://github.com/semaloop/cli/compare/v1.15.0...v1.16.0) (2026-11-26)
 
 
